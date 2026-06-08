@@ -88,25 +88,56 @@ export default function App() {
   const [pdfTitle, setPdfTitle] = useState("DOKUMEN TRANSLITERASI RESMI");
   const [userEmail, setUserEmail] = useState(() => localStorage.getItem("aksara_user_email") || "agongpor@gmail.com");
   const [pdfAuthor, setPdfAuthor] = useState(() => localStorage.getItem("aksara_user_email") || "agongpor@gmail.com");
-  const [spreadsheetId, setSpreadsheetId] = useState(() => localStorage.getItem("aksara_spreadsheet_id") || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0");
-  const [appsScriptUrl, setAppsScriptUrl] = useState(() => localStorage.getItem("aksara_apps_script_url") || "");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [queueSize, setQueueSize] = useState(0);
   const [tempUserEmail, setTempUserEmail] = useState("");
-  const [tempSpreadsheetId, setTempSpreadsheetId] = useState("");
-  const [tempAppsScriptUrl, setTempAppsScriptUrl] = useState("");
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState("");
+
+  const [serverSyncStatus, setServerSyncStatus] = useState<{
+    success: boolean;
+    lastSyncTime: string;
+    error: string;
+    rowsUploaded: number;
+  } | null>(null);
+  const [serverConfigured, setServerConfigured] = useState({
+    spreadsheetId: false,
+    appsScriptUrl: false,
+    spreadsheetIdValue: "",
+    appsScriptUrlValue: ""
+  });
+
+  // Fetch server-side sync status periodically (5 seconds)
+  useEffect(() => {
+    const fetchSyncStatus = () => {
+      fetch("/api/sheets/status")
+        .then(res => res.json())
+        .then(data => {
+          if (data) {
+            setQueueSize(data.queueSize);
+            if (data.lastSyncStatus) {
+              setServerSyncStatus(data.lastSyncStatus);
+            }
+            if (data.configured) {
+              setServerConfigured(data.configured);
+            }
+          }
+        })
+        .catch(err => console.error("Gagal menjangkau status sinkronisasi server:", err));
+    };
+
+    fetchSyncStatus();
+    const interval = setInterval(fetchSyncStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Sync temp variables when modal opens
   useEffect(() => {
     if (showSettingsModal) {
       setTempUserEmail(userEmail);
-      setTempSpreadsheetId(spreadsheetId);
-      setTempAppsScriptUrl(appsScriptUrl);
       setTestResult("");
     }
-  }, [showSettingsModal, userEmail, spreadsheetId, appsScriptUrl]);
+  }, [showSettingsModal, userEmail]);
 
   const [pdfNotes, setPdfNotes] = useState("Hasil alih aksara dari karakter Latin menuju ejaan Arab yang sah berdasarkan referensi linguistik kustom.");
   const [printDate, setPrintDate] = useState(() => {
@@ -849,7 +880,7 @@ export default function App() {
     fetch("/api/sheets/add-queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item, direction, spreadsheetId, appsScriptUrl })
+      body: JSON.stringify({ item, direction })
     })
     .then(res => res.json())
     .then(data => {
@@ -907,7 +938,7 @@ export default function App() {
         fetch("/api/sheets/add-queue", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ item, direction, spreadsheetId, appsScriptUrl })
+          body: JSON.stringify({ item, direction })
         })
         .then(res => res.json())
         .then(data => {
@@ -923,7 +954,7 @@ export default function App() {
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [latinInput, finalArabicOutput, useAI, aiLoading, preset, userIp, userLocation, direction, userEmail, spreadsheetId, appsScriptUrl]);
+  }, [latinInput, finalArabicOutput, useAI, aiLoading, preset, userIp, userLocation, direction, userEmail]);
 
   // Copy current result to clipboard
   const copyToClipboard = (textToCopy: string) => {
@@ -2496,7 +2527,7 @@ export default function App() {
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-5 text-xs text-slate-705">
               <p className="text-slate-500 leading-relaxed text-[11px]">
-                Sesuaikan profil perangkat Anda dan integrasikan dengan Google Sheet pribadi Anda agar riwayat alih aksara secara berkala terunggah otomatis di latar belakang.
+                Aplikasi ini dikonfigurasi untuk menyinkronkan seluruh riwayat penulisan secara berkala ke Google Sheet resmi terpusat seperti yang diminta.
               </p>
 
               {/* 1. Akun Pengguna / User Email */}
@@ -2512,96 +2543,105 @@ export default function App() {
                   className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 font-medium transition-all text-slate-800"
                 />
                 <p className="text-slate-400 text-[10px]">
-                  Terdeteksi dari browser Anda yang aktif sekarang. Contoh: <span className="font-mono bg-slate-100 px-1 rounded">agongpor@gmail.com</span>
+                  ID penulis saat riwayat diunggah. Contoh: <span className="font-mono bg-slate-100 px-1 rounded">agongpor@gmail.com</span>
                 </p>
               </div>
 
               {/* 2. Google Spreadsheet ID */}
               <div className="space-y-1.5">
-                <label className="block text-slate-600 uppercase font-mono font-semibold tracking-wide">
-                  ID Google Spreadsheet
+                <label className="block text-slate-600 uppercase font-mono font-semibold tracking-wide flex justify-between">
+                  <span>ID Google Spreadsheet Terpusat</span>
+                  <span className="text-[10px] text-emerald-600 font-sans tracking-normal font-normal">Terkunci (Admin)</span>
                 </label>
                 <input
                   type="text"
-                  value={tempSpreadsheetId}
-                  onChange={(e) => setTempSpreadsheetId(e.target.value)}
-                  placeholder="ID Spreadsheet Anda"
-                  className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 font-mono transition-all text-slate-800"
+                  readOnly
+                  disabled
+                  value={serverConfigured.spreadsheetIdValue || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0"}
+                  className="w-full bg-slate-100 border border-slate-200 text-slate-500 rounded-xl p-3 font-mono cursor-not-allowed select-all"
                 />
                 <p className="text-slate-400 text-[10px] leading-relaxed">
-                  Dapat diambil dari URL Spreadsheet Anda setelah <strong className="font-mono">/d/</strong> hingga sebelum <strong className="font-mono">/edit</strong>.
+                  Penyimpanan ditetapakan secara terpusat untuk menjaga konsistensi pangkalan data pemilik aplikasi.
                 </p>
               </div>
 
-              {/* 3. Google Apps Script Web App URL */}
+              {/* 3. Google Apps Script Web App URL STATUS */}
               <div className="space-y-1.5">
-                <label className="block text-slate-600 uppercase font-mono font-semibold tracking-wide">
-                  URL Google Apps Script Web App
+                <label className="block text-slate-600 uppercase font-mono font-semibold tracking-wide flex justify-between">
+                  <span>Status Koneksi Google Apps Script</span>
+                  <span className="text-[10px] text-indigo-600 font-sans tracking-normal font-normal">Terkunci (Admin)</span>
                 </label>
-                <input
-                  type="url"
-                  value={tempAppsScriptUrl}
-                  onChange={(e) => setTempAppsScriptUrl(e.target.value)}
-                  placeholder="https://script.google.com/macros/s/.../exec"
-                  className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 font-mono transition-all text-slate-800"
-                />
+                <div className={`p-3 rounded-xl border flex items-center space-x-2 ${
+                  serverConfigured.appsScriptUrl 
+                    ? "bg-emerald-50 border-emerald-100 text-emerald-800 font-semibold" 
+                    : "bg-amber-50 border-amber-100 text-amber-800 font-semibold"
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${serverConfigured.appsScriptUrl ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`}></span>
+                  <span className="font-sans">
+                    {serverConfigured.appsScriptUrl 
+                      ? "Terhubung ke Google Web App" 
+                      : "Menunggu setup GOOGLE_APPS_SCRIPT_URL di server oleh Admin"
+                    }
+                  </span>
+                </div>
+                {serverConfigured.appsScriptUrlValue ? (
+                  <p className="text-slate-400 text-[10px] font-mono leading-relaxed truncate px-1">
+                    Script URL: {serverConfigured.appsScriptUrlValue.slice(0, 45)}...
+                  </p>
+                ) : (
+                  <p className="text-red-400 text-[10.5px] leading-relaxed">
+                    ⚙️ Hubungi tim admin Anda untuk menentukan <code className="bg-slate-100 px-1 rounded font-mono">GOOGLE_APPS_SCRIPT_URL</code> di panel Web Console agar proses sync Google Sheets berjalan lancar.
+                  </p>
+                )}
                 <p className="text-slate-400 text-[10px] leading-relaxed">
-                  PENTING: Salin kode makro di <code className="bg-slate-100 px-1 rounded font-mono">google_apps_script.js</code> lalu deploy sebagai <strong>Web App</strong> dengan akses <strong>"Anyone"</strong>. Tempelkan tautan <code className="bg-slate-100 px-1 rounded font-mono">/exec</code> di sini.
+                  Semua alih aksara dikoordinasikan secara asinkron di belakang layar tanpa menghambat interaksi mengetik Anda.
                 </p>
               </div>
 
-              {/* Quick actions & tests */}
+              {/* Server Diagnostics & Last Sync Result */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-700 block text-[11px]">Uji Tautan Web App</span>
-                    <span className="text-slate-400 text-[10px]">Cek respon konektivitas dari Google.</span>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={isTestingConnection}
-                    onClick={async () => {
-                      if (!tempAppsScriptUrl) {
-                        setTestResult("❌ Error: Harap isi kolom URL Google Apps Script!");
-                        return;
-                      }
-                      setIsTestingConnection(true);
-                      setTestResult("Menghubungi Google Apps Script...");
-                      try {
-                        const pingUrl = `${tempAppsScriptUrl}${tempAppsScriptUrl.includes("?") ? "&" : "?"}ping=1`;
-                        const res = await fetch(pingUrl, { method: "GET", mode: "no-cors" });
-                        setTestResult("✅ Sukses terhubung! Hubungan Web App siap diakses.");
-                      } catch (err: any) {
-                        setTestResult(`❌ Gagal terhubung: ${err.message}. Periksa alamat URL.`);
-                      } finally {
-                        setIsTestingConnection(false);
-                      }
-                    }}
-                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-semibold font-sans px-3 py-1.5 rounded-xl cursor-pointer transition-colors shrink-0"
-                  >
-                    {isTestingConnection ? "Uji..." : "Mulai Uji"}
-                  </button>
+                <div>
+                  <span className="font-bold text-slate-700 block text-[11px]">Hasil Sinkronisasi Berkas</span>
+                  <span className="text-slate-400 text-[10px]">Riwayat diunggah otomatis dalam interval/batch 15 detik.</span>
                 </div>
-                {testResult && (
-                  <div className={`p-2.5 rounded-xl font-mono text-[10px] leading-relaxed border ${
-                    testResult.startsWith("✅") 
-                      ? "bg-emerald-50 border-emerald-100 text-emerald-800" 
-                      : testResult.startsWith("❌") 
-                        ? "bg-red-50 border-red-100 text-red-700" 
-                        : "bg-amber-50 border-amber-100 text-amber-850"
-                  }`}>
-                    {testResult}
+                {serverSyncStatus && serverSyncStatus.lastSyncTime ? (
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200 space-y-1.5 text-[10px] font-mono">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">Status Sync Terakhir:</span>
+                      <span className={`font-semibold ${serverSyncStatus.success ? "text-emerald-600" : "text-red-500 animate-pulse"}`}>
+                        {serverSyncStatus.success ? "✅ Selesai (Sukses)" : "❌ Gagal"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Waktu Kirim:</span>
+                      <span className="text-slate-700 font-bold">{serverSyncStatus.lastSyncTime}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Baris Terunggah:</span>
+                      <span className="text-slate-700 font-bold">{serverSyncStatus.rowsUploaded} baris</span>
+                    </div>
+                    {serverSyncStatus.error && (
+                      <div className="mt-1.5 p-2 bg-red-50 border border-red-100 rounded text-red-700 text-[9px] whitespace-pre-wrap leading-normal">
+                        Error: {serverSyncStatus.error}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-slate-100/50 p-2.5 rounded-xl border border-dashed border-slate-300 text-center text-slate-400 text-[10px]">
+                    Belum ada riwayat baru yang diunggah sejak aplikasi dimuat.
                   </div>
                 )}
               </div>
 
               {/* Queue status information */}
-              <div className="flex items-center justify-between bg-indigo-50/55 p-3 rounded-xl border border-indigo-100 text-indigo-900 tracking-wide text-[11px]">
+              <div className="flex items-center justify-between bg-indigo-50/55 p-3 rounded-xl border border-indigo-100 text-indigo-950 tracking-wide text-[11px]">
                 <div className="flex items-center space-x-2">
                   <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                  <span>Menunggu sinkronisasi berkala (15s):</span>
+                  <span>Antrean Pending Lokal (Sync 15s):</span>
                 </div>
-                <strong>{queueSize} Baris Riwayat</strong>
+                <strong className={queueSize > 0 ? "text-red-500 font-mono animate-bounce text-[12px]" : "text-emerald-600 font-mono"}>
+                  {queueSize} Baris Riwayat
+                </strong>
               </div>
             </div>
 
@@ -2609,7 +2649,7 @@ export default function App() {
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex space-x-3 justify-end">
               <button
                 onClick={() => setShowSettingsModal(false)}
-                className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-750 font-semibold px-4 py-2 rounded-xl cursor-pointer transition-all text-xs"
+                className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold px-4 py-2 rounded-xl cursor-pointer transition-all text-xs"
               >
                 Tutup
               </button>
@@ -2617,19 +2657,15 @@ export default function App() {
                 onClick={() => {
                   setUserEmail(tempUserEmail);
                   setPdfAuthor(tempUserEmail);
-                  setSpreadsheetId(tempSpreadsheetId);
-                  setAppsScriptUrl(tempAppsScriptUrl);
                   
                   localStorage.setItem("aksara_user_email", tempUserEmail);
-                  localStorage.setItem("aksara_spreadsheet_id", tempSpreadsheetId);
-                  localStorage.setItem("aksara_apps_script_url", tempAppsScriptUrl);
                   
                   setShowSettingsModal(false);
-                  showToast("Pengaturan sync disimpan di perangkat ini!");
+                  showToast("Pengaturan profil berhasil disimpan!");
                 }}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2 rounded-xl cursor-pointer transition-all text-xs shadow-md"
               >
-                Simpan & Aktifkan
+                Simpan Profil
               </button>
             </div>
 
