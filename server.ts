@@ -215,53 +215,55 @@ Harap berikan respons sebagai objek JSON dengan format schema berikut:
   }
 });
 
-// API endpoint for Google Sheets synchronization (backend proxy)
+// API endpoint for Google Sheets synchronization leveraging Google Apps Script (backend proxy)
 app.post("/api/sheets/append", async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: "Authorization header (Bearer token) diperlukan." });
-    }
+    const { values } = req.body;
 
-    const { spreadsheetId, values } = req.body;
-
-    if (!spreadsheetId) {
-      return res.status(400).json({ error: "ID Spreadsheet (spreadsheetId) diperlukan." });
-    }
+    // Use default Spreadsheet ID provided by the user, or load from environment
+    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
+    const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
 
     if (!values || !Array.isArray(values) || values.length === 0) {
-      return res.status(400).json({ error: "Pilih atau susun baris data (values) yang ingin disimpan." });
+      return res.status(400).json({ error: "Data 'values' (baris-baris data) diperlukan." });
     }
 
-    const range = "A:H"; // Logs to Columns A to H
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
+    if (!appsScriptUrl) {
+      console.warn("GOOGLE_APPS_SCRIPT_URL environment variable is not defined.");
+      return res.json({
+        success: false,
+        message: "Penyimpanan lokal berhasil, namun sinkronisasi Google Sheets dilewati karena GOOGLE_APPS_SCRIPT_URL belum dikonfigurasi di back-end.",
+        spreadsheetId,
+      });
+    }
 
-    const response = await fetch(url, {
+    // Proxy the request to Google Apps Script Web App
+    const response = await fetch(appsScriptUrl, {
       method: "POST",
       headers: {
-        Authorization: authHeader,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        values: values,
+        spreadsheetId,
+        values,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Sheets API backend error response:", errorText);
+      console.error("Apps Script Web App error response:", errorText);
       return res.status(response.status).json({
-        error: "Google Sheets API mengembalikan kesalahan dari server.",
+        error: "Google Apps Script Web App mengembalikan kesalahan dari server.",
         details: errorText,
       });
     }
 
-    const result = await response.json();
-    return res.json(result);
+    const result = await response.json().catch(() => ({ success: true }));
+    return res.json({ success: true, result });
   } catch (error: any) {
     console.error("Backend sheets proxy error:", error);
     return res.status(500).json({
-      error: "Gagal menyinkronkan data ke Google Sheets melalui back-end.",
+      error: "Gagal menyinkronkan data ke Google Sheets melalui Apps Script di back-end.",
       details: error.message,
     });
   }

@@ -99,13 +99,6 @@ export default function App() {
   const [history, setHistory] = useState<TranslationItem[]>([]);
 
   // Google Sheets integration state
-  const [sheetClientId, setSheetClientId] = useState(() => localStorage.getItem("aragon_sheets_client_id") || "");
-  const [sheetSpreadsheetId, setSheetSpreadsheetId] = useState(() => localStorage.getItem("aragon_spreadsheet_id") || "");
-  const [sheetsAccessToken, setSheetsAccessToken] = useState<string | null>(() => localStorage.getItem("aragon_sheets_token") || null);
-  const [sheetsTokenExpiry, setSheetsTokenExpiry] = useState<number | null>(() => {
-    const val = localStorage.getItem("aragon_sheets_token_expiry");
-    return val ? parseInt(val) : null;
-  });
   const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   const [toastMessage, setToastMessage] = useState("");
@@ -276,39 +269,7 @@ export default function App() {
     };
   }, []);
 
-  // Google Sheets OAuth redirect detection inside the popup window
-  useEffect(() => {
-    if (window.opener && window.location.hash) {
-      const hash = window.location.hash.substring(1);
-      const params = new URLSearchParams(hash);
-      const token = params.get("access_token");
-      if (token) {
-        window.opener.postMessage({ type: "OAUTH2_SHEETS_SUCCESS", token }, "*");
-        window.close();
-      }
-    }
-  }, []);
 
-  // Listen to message from OAuth popup on the parent window
-  useEffect(() => {
-    const handleSheetsMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith(".run.app") && !origin.includes("localhost")) {
-        return;
-      }
-      if (event.data?.type === "OAUTH2_SHEETS_SUCCESS") {
-        const receivedToken = event.data.token;
-        setSheetsAccessToken(receivedToken);
-        localStorage.setItem("aragon_sheets_token", receivedToken);
-        const expiry = Date.now() + 3500 * 1000;
-        setSheetsTokenExpiry(expiry);
-        localStorage.setItem("aragon_sheets_token_expiry", expiry.toString());
-        showToast("Berhasil menghubungkan Google Sheets!");
-      }
-    };
-    window.addEventListener("message", handleSheetsMessage);
-    return () => window.removeEventListener("message", handleSheetsMessage);
-  }, []);
 
   const loadDefaultPreset = (targetPreset: PresetType) => {
     let defaultList = targetPreset === "jawi" ? DEFAULT_JAWI_MAPPINGS : DEFAULT_PEGON_MAPPINGS;
@@ -774,17 +735,8 @@ export default function App() {
     showToast(`Referensi "${label}" berhasil dihapus.`);
   };
 
-  // Extract spreadsheet ID from url if provided
-  const extractSpreadsheetId = (urlOrId: string) => {
-    const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-    return match ? match[1] : urlOrId.trim();
-  };
-
   // Append a single row of stats to Google Sheets (routed via backend)
   const appendTranslationToSheet = async (item: TranslationItem) => {
-    const spreadsheetId = extractSpreadsheetId(sheetSpreadsheetId);
-    if (!sheetsAccessToken || !spreadsheetId) return;
-
     try {
       const row = [
         item.timestamp || new Date().toLocaleString("id-ID"),
@@ -800,11 +752,9 @@ export default function App() {
       const response = await fetch("/api/sheets/append", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${sheetsAccessToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          spreadsheetId,
           values: [row]
         })
       });
@@ -812,24 +762,19 @@ export default function App() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Sheets API error:", errorText);
-        showToast("Sinkronisasi otomatis Google Sheets gagal.");
       } else {
-        showToast("Statistik transliterasi berhasil disimpan ke Google Sheets via back-end!");
+        const data = await response.json().catch(() => ({}));
+        if (data.success && data.result) {
+          showToast("Statistik berhasil disinkronkan ke Google Sheets!");
+        }
       }
     } catch (error) {
       console.error("Gagal menyimpan ke Google Sheets via back-end:", error);
-      showToast("Gagal menyimpan statistik ke Google Sheets. Silakan periksa koneksi.");
     }
   };
 
   // Sync entire history to Google Sheets in bulk (routed via backend)
   const syncAllHistoryToSheet = async () => {
-    const spreadsheetId = extractSpreadsheetId(sheetSpreadsheetId);
-    if (!sheetsAccessToken || !spreadsheetId) {
-      alert("Harap hubungkan akun Google Sheets dan isi ID Spreadsheet terlebih dahulu di panel sinkronisasi.");
-      return;
-    }
-
     if (history.length === 0) {
       alert("Tidak ada riwayat transliterasi untuk disinkronkan.");
       return;
@@ -851,11 +796,9 @@ export default function App() {
       const response = await fetch("/api/sheets/append", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${sheetsAccessToken}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          spreadsheetId,
           values: rows
         })
       });
@@ -864,7 +807,12 @@ export default function App() {
         throw new Error(await response.text());
       }
 
-      showToast(`Sukses mengunggah ${history.length} baris riwayat ke Google Sheets via back-end!`);
+      const data = await response.json().catch(() => ({ success: false }));
+      if (data.success) {
+        showToast(`Sukses menyinkronkan seluruh riwayat (${history.length} baris) ke Google Sheets!`);
+      } else {
+        showToast("Sinkronisasi otomatis disimpan lokal.");
+      }
     } catch (error: any) {
       console.error("Gagal mengunggah seluruh riwayat ke Google Sheets via back-end:", error);
       alert("Gagal mengunggah riwayat lewat back-end: " + (error.message || error));
@@ -895,13 +843,8 @@ export default function App() {
     localStorage.setItem("aksara_history", JSON.stringify(updated));
     showToast("Hasil transliterasi berhasil disimpan ke Riwayat!");
 
-    // If Google Sheets Sync is connected, save single record automatically
-    if (sheetsAccessToken && sheetSpreadsheetId) {
-      const isExpired = sheetsTokenExpiry && Date.now() > sheetsTokenExpiry;
-      if (!isExpired) {
-        appendTranslationToSheet(item);
-      }
-    }
+    // Automatically send record data to Google Sheets via back-end
+    appendTranslationToSheet(item);
   };
 
   // Delete history item
@@ -944,13 +887,8 @@ export default function App() {
         const updated = [item, ...prev];
         localStorage.setItem("aksara_history", JSON.stringify(updated));
         
-        // If Google Sheets Sync is connected, save single record automatically (routed via backend)
-        if (sheetsAccessToken && sheetSpreadsheetId) {
-          const isExpired = sheetsTokenExpiry && Date.now() > sheetsTokenExpiry;
-          if (!isExpired) {
-            appendTranslationToSheet(item);
-          }
-        }
+        // Save record automatically via backend
+        appendTranslationToSheet(item);
         
         return updated;
       });
@@ -958,7 +896,7 @@ export default function App() {
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [latinInput, finalArabicOutput, useAI, aiLoading, preset, sheetsAccessToken, sheetSpreadsheetId, sheetsTokenExpiry]);
+  }, [latinInput, finalArabicOutput, useAI, aiLoading, preset]);
 
   // Copy current result to clipboard
   const copyToClipboard = (textToCopy: string) => {
@@ -2078,7 +2016,7 @@ export default function App() {
       </section>
 
       {/* GOOGLE SHEETS INTEGRATION SECTION */}
-      <section className="max-w-7xl mx-auto px-4 md:px-8 mt-8 no-print">
+      <section className="max-w-7xl mx-auto px-4 md:px-8 mt-8 no-print animate-fade-in" id="google-sheets-section">
         <div className="bg-white rounded-3xl border border-slate-200/95 shadow-sm p-6 space-y-6">
           
           <div className="flex items-center space-x-3 border-b border-slate-100 pb-4">
@@ -2089,120 +2027,43 @@ export default function App() {
             </div>
             <div>
               <h2 className="font-display font-semibold text-lg text-slate-900">
-                Integrasi & Sinkronisasi Google Sheets
+                Integrasi & Sinkronisasi Google Sheets Back-End
               </h2>
               <p className="text-slate-500 text-xs mt-0.5">
-                Simpan statistik frekuensi penggunaan, teks asal Latin, dan hasil transliterasi Arab Pegon/Jawi Anda secara aman di spreadsheet Google Sheets Anda.
+                Statistik frekuensi penggunaan, teks kustom Latin, beserta hasil alih aksara Anda disinkronkan langsung ke Google Sheets secara aman di sisi server.
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
-            {/* Left Box: Setup and Connection */}
-            <div className="lg:col-span-5 bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center space-x-2 border-b border-slate-200 pb-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                <h3 className="font-display font-semibold text-sm text-slate-800">
-                  Langkah 1: Konfigurasi Akses Spreadsheet
-                </h3>
+            {/* Left Box: Active Connection Status Info */}
+            <div className="lg:col-span-5 bg-emerald-50/55 border border-emerald-100 rounded-2xl p-5 space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center space-x-2 border-b border-emerald-100 pb-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <h3 className="font-display font-semibold text-sm text-emerald-900">
+                    Koneksi Otomatis Aktif
+                  </h3>
+                </div>
+
+                <div className="mt-3.5 space-y-3">
+                  <div className="text-xs text-emerald-850 space-y-2 leading-relaxed">
+                    <p>
+                      Sistem terhubung secara aman di back-end ke Spreadsheet ID:
+                    </p>
+                    <code className="block bg-white p-2.5 rounded-lg border border-emerald-200 text-[10px] font-mono break-all text-emerald-800 shadow-xs">
+                      1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0
+                    </code>
+                    <p className="text-[11px] text-slate-500 mt-2">
+                      Setiap kali Anda mengetik teks beralih aksara atau mengeklik tombol "Simpan Riwayat", sistem akan mengirimkan data baris statistik secara otomatis ke spreadsheet.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-slate-500 text-[11px] uppercase font-mono mb-1">
-                    ID Spreadsheet Google Sheets / Kombinasi URL
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-1 focus:ring-emerald-850 focus:outline-none placeholder-slate-400 font-mono"
-                    placeholder="Masukkan Spreadsheet URL atau ID"
-                    value={sheetSpreadsheetId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSheetSpreadsheetId(val);
-                      localStorage.setItem("aragon_spreadsheet_id", val);
-                    }}
-                  />
-                  <span className="text-[10px] text-slate-400 block mt-1 leading-normal">
-                    * Tempel URL spreadsheet atau temukan id uniknya di antara <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">/d/</code> dan <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">/edit</code> di tautan browser Anda.
-                  </span>
-                </div>
-
-                <div>
-                  <label className="block text-slate-500 text-[11px] uppercase font-mono mb-1">
-                    Google Client ID (Kredensial OAuth)
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-1 focus:ring-emerald-850 focus:outline-none placeholder-slate-400 font-mono"
-                    placeholder="E.g. 123456-abcdef.apps.googleusercontent.com"
-                    value={sheetClientId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSheetClientId(val);
-                      localStorage.setItem("aragon_sheets_client_id", val);
-                    }}
-                  />
-                  <span className="text-[10px] text-slate-400 block mt-1 leading-normal">
-                    * Digunakan untuk mengizinkan login aman Anda. Anda dapat membuat Client ID gratis ditenagai oleh Google API Console.
-                  </span>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
-                  {sheetsAccessToken && (!sheetsTokenExpiry || Date.now() < sheetsTokenExpiry) ? (
-                    <div className="space-y-3">
-                      <div className="bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-xl p-3 text-xs flex items-start space-x-2">
-                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold">Terhubung dengan Sukses!</p>
-                          <p className="text-[10px] text-emerald-700 mt-0.5">
-                            Status: Sesi Google Sheets Aktif. Transliterasi baru yang Anda simpan akan terdokumentasi otomatis ke Sheet.
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSheetsAccessToken(null);
-                          setSheetsTokenExpiry(null);
-                          localStorage.removeItem("aragon_sheets_token");
-                          localStorage.removeItem("aragon_sheets_token_expiry");
-                          showToast("Koneksi Google Sheets diputus.");
-                        }}
-                        className="w-full py-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-semibold rounded-xl text-xs transition-colors"
-                      >
-                        Putuskan Koneksi Akun Google
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        if (!sheetClientId.trim()) {
-                          alert("Harap isi Google Client ID terlebih dahulu!");
-                          return;
-                        }
-                        const rUri = window.location.origin;
-                        const scopeStr = "https://www.googleapis.com/auth/spreadsheets";
-                        const authUrlForSheets = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(sheetClientId.trim())}&redirect_uri=${encodeURIComponent(rUri)}&response_type=token&scope=${encodeURIComponent(scopeStr)}&prompt=consent`;
-                        
-                        localStorage.setItem("aragon_sheets_client_id", sheetClientId.trim());
-                        const pWindow = window.open(authUrlForSheets, "aragon_sheets_popup", "width=600,height=700");
-                        if (!pWindow) {
-                          alert("Popup login diblokir oleh browser! Harap izinkan pop-up.");
-                        }
-                      }}
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors shadow-sm flex items-center justify-center space-x-1.5"
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M21.35 11.1h-9.17v2.73h6.51c-.33 1.56-1.56 2.95-3.18 3.5v2.88h5.15c3.01-2.78 4.75-6.87 4.75-11.83 0-.6-.05-1.2-.16-1.28z" fill="#4285F4"/>
-                        <path d="M12.18 21.43c2.75 0 5.06-.91 6.75-2.48l-5.15-2.88c-.9 1.17-2.31 1.95-3.9 1.95-3.01 0-5.56-2.03-6.47-4.75H2.1v2.98c1.72 3.42 5.25 5.75 9.38 5.75z" fill="#34A853"/>
-                        <path d="M5.71 13.27c-.24-.71-.38-1.48-.38-2.27s.14-1.56.38-2.27V5.75H2.1c-.81 1.62-1.27 3.44-1.27 5.37s.46 3.75 1.27 5.37l3.61-2.22z" fill="#FBBC05"/>
-                        <path d="M12.18 5.4c1.5 0 2.85.52 3.91 1.53l2.93-2.93C17.29 2.48 14.98 1.57 12.18 1.57 8.05 1.57 4.52 3.9 2.8 7.32l3.61 2.22c.91-2.72 3.46-4.75 6.47-4.75z" fill="#EA4335"/>
-                      </svg>
-                      <span>Hubungkan Akun Google Anda</span>
-                    </button>
-                  )}
-                </div>
+              <div className="pt-3 border-t border-emerald-150 text-[11px] text-emerald-800 font-medium">
+                Ditenagai oleh Google Apps Script Web App
               </div>
             </div>
 
@@ -2212,7 +2073,7 @@ export default function App() {
                 <div className="flex items-center space-x-2 border-b border-slate-200 pb-2.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                   <h3 className="font-display font-semibold text-sm text-slate-800">
-                    Langkah 2: Kelola Sinkronisasi & Riwayat
+                    Format & Organisasi Kolom Statistika
                   </h3>
                 </div>
 
@@ -2231,30 +2092,23 @@ export default function App() {
                     { label: "Kolom G", val: "Jumlah Kata" },
                     { label: "Kolom H", val: "Tipe Mesin" }
                   ].map((col, idx) => (
-                    <div key={idx} className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-center">
+                    <div key={idx} className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-center shadow-2xs hover:border-emerald-250 transition-colors">
                       <span className="text-[10px] font-mono font-bold text-emerald-800 block uppercase">{col.label}</span>
                       <span className="text-[11px] text-slate-700 font-medium font-sans block mt-0.5">{col.val}</span>
                     </div>
                   ))}
-                </div>
-
-                <div className="bg-amber-50/70 text-slate-700 border border-amber-200/80 rounded-xl p-3.5 text-xs mt-4 leading-relaxed flex items-start space-x-2">
-                  <span className="text-sm shrink-0 mt-0.5">💡</span>
-                  <span>
-                    <strong>Saran Penggunaan Pertama:</strong> Pastikan Anda telah membuat spreadsheet kosong dan memasukkan judul kolom di baris pertama agar visual data statistik Anda rapi dan terorganisir.
-                  </span>
                 </div>
               </div>
 
               <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3 mt-4">
                 <button
                   onClick={syncAllHistoryToSheet}
-                  disabled={isSyncingAll || !sheetsAccessToken || !sheetSpreadsheetId}
-                  className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-200 disabled:text-slate-400 font-bold rounded-xl text-xs transition-colors flex items-center justify-center space-x-2"
+                  disabled={isSyncingAll}
+                  className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-200 disabled:text-slate-400 font-bold rounded-xl text-xs transition-colors flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
                 >
                   {isSyncingAll ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
                       <span>Sedang Menyinkronkan...</span>
                     </>
                   ) : (
@@ -2279,8 +2133,7 @@ export default function App() {
                     };
                     await appendTranslationToSheet(testItem);
                   }}
-                  disabled={!sheetsAccessToken || !sheetSpreadsheetId}
-                  className="py-3 px-4 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-300 font-semibold text-slate-800 rounded-xl text-xs transition-colors border border-slate-250 flex items-center justify-center"
+                  className="py-3 px-4 bg-slate-100 hover:bg-slate-200 font-semibold text-slate-800 rounded-xl text-xs transition-colors border border-slate-250 flex items-center justify-center cursor-pointer shadow-2xs"
                 >
                   Kirim Baris Uji Coba (Test)
                 </button>

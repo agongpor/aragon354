@@ -48,7 +48,7 @@ export const DEFAULT_JAWI_MAPPINGS: CustomMapping[] = [
   { id: "jw_dan", latin: "dan", arabic: "دان", type: "word", description: "Kata hubung dan", isPreset: true },
   { id: "jw_yang", latin: "yang", arabic: "يڠ", type: "word", description: "Kata hubung yang", isPreset: true },
   { id: "jw_untuk", latin: "untuk", arabic: "اونتوق", type: "word", description: "Untuk", isPreset: true },
-  { id: "jw_ke", latin: "ke", arabic: "ک", type: "word", description: "Ke", isPreset: true },
+  { id: "jw_ke", latin: "ke", arabic: "ك", type: "word", description: "Ke", isPreset: true },
   { id: "jw_di", latin: "di", arabic: "د", type: "word", description: "Di", isPreset: true },
   { id: "jw_ini", latin: "ini", arabic: "ايني", type: "word", description: "Ini", isPreset: true },
   { id: "jw_itu", latin: "itu", arabic: "ايتو", type: "word", description: "Itu", isPreset: true },
@@ -103,6 +103,7 @@ export const DEFAULT_PEGON_MAPPINGS: CustomMapping[] = [
   { id: "pw_kita", latin: "kita", arabic: "كيتا", type: "word", description: "Kita (Pegon menulis alif akhir)", isPreset: true },
   { id: "pw_dan", latin: "dan", arabic: "دان", type: "word", isPreset: true },
   { id: "pw_yang", latin: "yang", arabic: "ياڠ", type: "word", isPreset: true },
+  { id: "pw_ke", latin: "ke", arabic: "ك", type: "word", description: "Ke", isPreset: true },
   { id: "pw_ini", latin: "ini", arabic: "ايني", type: "word", isPreset: true },
   { id: "pw_itu", latin: "itu", arabic: "ايتو", type: "word", isPreset: true },
   { id: "pw_ada", latin: "ada", arabic: "ادا", type: "word", description: "Ada (Pegon menulis alif)", isPreset: true }

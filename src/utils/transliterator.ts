@@ -304,6 +304,20 @@ export function transliterateWord(
     };
   }
 
+  // Special Rule: Standalone 'ke' or 'k' should be written with standard Arabic Kaf 'ك'
+  if (lowerClean === "ke" || lowerClean === "k") {
+    steps.push({
+      original: clean,
+      result: "ك",
+      explanation: `Aturan Aksara: Huruf kaf yang berdiri sendiri seperti "${clean}" ditulis dengan kaf polos/standar "ك".`,
+    });
+    return {
+      word: rawWord,
+      arabic: prefix + "ك" + suffix,
+      steps,
+    };
+  }
+
   // 1.5 Check if word is an Arabic Loanword
   if (ARABIC_LOANWORDS[lowerClean]) {
     const arabicSpelling = ARABIC_LOANWORDS[lowerClean];
