@@ -412,6 +412,7 @@ app.get("/api/sheets/status", (req: Request, res: Response) => {
     lastSyncStatus,
     activeUserEmail: activeEmail || "agongpor@gmail.com",
     detectedIp: detectedIp || "180.252.80.45",
+    debugHeaders: req.headers, // Return headers for real-time debugging in UI
     configured: {
       spreadsheetId: !!(process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID),
       appsScriptUrl: !!(process.env.GOOGLE_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL),

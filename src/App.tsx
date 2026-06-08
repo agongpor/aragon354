@@ -90,8 +90,14 @@ export default function App() {
   const [exportFormat, setExportFormat] = useState<'lengkap' | 'latin-arab' | 'pegon-saja'>('lengkap');
   const [showFormatSelector, setShowFormatSelector] = useState(false);
   const [pdfTitle, setPdfTitle] = useState("DOKUMEN TRANSLITERASI RESMI");
-  const [userEmail, setUserEmail] = useState(() => localStorage.getItem("aksara_user_email") || "Pengguna Pegon");
-  const [pdfAuthor, setPdfAuthor] = useState(() => localStorage.getItem("aksara_user_email") || "Pengguna Pegon");
+  const [userEmail, setUserEmail] = useState(() => {
+    const saved = localStorage.getItem("aksara_user_email");
+    return (!saved || saved === "Pengguna Pegon" || saved === "Anonim") ? "agongpor@gmail.com" : saved;
+  });
+  const [pdfAuthor, setPdfAuthor] = useState(() => {
+    const saved = localStorage.getItem("aksara_user_email");
+    return (!saved || saved === "Pengguna Pegon" || saved === "Anonim") ? "agongpor@gmail.com" : saved;
+  });
   const [queueSize, setQueueSize] = useState(0);
 
   // States for direct browser-to-sheet sync (essential for static SPA hosting like Vercel / GitHub Pages)
@@ -205,15 +211,9 @@ export default function App() {
             }
             // Auto-detect and populate active Google user email from headers
             if (data.activeUserEmail) {
-              setUserEmail(prev => {
-                const currentFromStorage = localStorage.getItem("aksara_user_email");
-                if (!currentFromStorage || prev === "Pengguna Pegon" || prev === "Anonim") {
-                  localStorage.setItem("aksara_user_email", data.activeUserEmail);
-                  setPdfAuthor(data.activeUserEmail);
-                  return data.activeUserEmail;
-                }
-                return prev;
-              });
+              setUserEmail(data.activeUserEmail);
+              setPdfAuthor(data.activeUserEmail);
+              localStorage.setItem("aksara_user_email", data.activeUserEmail);
             }
             // Populate server-detected IP address if local API failed or is loading
             if (data.detectedIp) {
