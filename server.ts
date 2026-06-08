@@ -215,6 +215,100 @@ Harap berikan respons sebagai objek JSON dengan format schema berikut:
 });
 
 // API endpoint for Google Sheets synchronization leveraging Google Apps Script (backend proxy)
+// API endpoint for Google Sheets synchronization leveraging Google Apps Script (backend proxy)
+let sheetQueue: any[][] = [];
+const SYNC_INTERVAL_MS = 30000; // Sinkronisasi setiap 30 detik secara berkala
+
+async function flushSheetsQueue() {
+  if (sheetQueue.length === 0) return;
+
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
+  const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
+
+  if (!appsScriptUrl) {
+    console.warn("[Sheets Sync] GOOGLE_APPS_SCRIPT_URL tidak dikonfigurasi. Queue dilewati.");
+    return;
+  }
+
+  const batchToUpload = [...sheetQueue];
+  sheetQueue = [];
+
+  try {
+    console.log(`[Sheets Sync] Mengunggah secara berkala ${batchToUpload.length} baris data ke Google-Sheets...`);
+    const response = await fetch(appsScriptUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        spreadsheetId,
+        values: batchToUpload,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Apps Script mengembalikan status ${response.status}`);
+    }
+    const result = await response.json().catch(() => ({ success: true }));
+    console.log(`[Sheets Sync] Sukses menyinkronkan berkala ${batchToUpload.length} baris.`, result);
+  } catch (error: any) {
+    console.error("[Sheets Sync] Gagal menyinkronkan berkala, mengembalikan ke antrean:", error.message);
+    // Kembalikan data yang gagal ke depan antrean
+    sheetQueue = [...batchToUpload, ...sheetQueue];
+  }
+}
+
+// Jalankan interval pembersih antrean secara berkala
+setInterval(flushSheetsQueue, SYNC_INTERVAL_MS);
+
+// API endpoint untuk menambah riwayat langsung ke dalam antrean back-end
+app.post("/api/sheets/add-queue", (req: Request, res: Response) => {
+  try {
+    const { item, direction } = req.body;
+
+    if (!item) {
+      return res.status(400).json({ error: "Item riwayat diperlukan." });
+    }
+
+    // Susun format baris baru sesuai dengan pemetaan kolom yang rapi
+    // Kolom A: Tanggal & Jam
+    // Kolom B: Teks Latin Input
+    // Kolom C: Hasil Translasi Arab
+    // Kolom D: Mode Arah Translasi
+    // Kolom E: Skema (Arab Pegon)
+    // Kolom F: Jumlah Karakter/Huruf
+    // Kolom G: Jumlah Kata
+    // Kolom H: Tipe Mesin Transliterasi
+    // Kolom I: Akun Pengguna (user)
+    // Kolom J: Lokasi Geografis (lokasi)
+    // Kolom K: Alamat IP Pengguna (ip-address)
+    const row = [
+      item.timestamp || new Date().toLocaleString("id-ID"),
+      item.latin || "",
+      item.arabic || "",
+      direction === "pegon-to-latin" ? "Arab Pegon ➔ Latin" : "Latin ➔ Arab",
+      "Arab Pegon",
+      (item.latin || "").length.toString(),
+      (item.latin || "").trim().split(/\s+/).filter(Boolean).length.toString(),
+      item.notes || "Mesin Aturan",
+      item.user || "agongpor@gmail.com",
+      item.location || "Jakarta, Indonesia",
+      item.ipAddress || "180.252.80.45"
+    ];
+
+    sheetQueue.push(row);
+    return res.json({
+      success: true,
+      message: "Data riwayat berhasil ditambahkan ke antrean sinkronisasi berkala back-end.",
+      queueSize: sheetQueue.length,
+      intervalSeconds: SYNC_INTERVAL_MS / 1000
+    });
+  } catch (err: any) {
+    console.error("Gagal menambahkan ke antrean:", err);
+    return res.status(500).json({ error: "Gagal memproses antrean riwayat.", details: err.message });
+  }
+});
+
 app.post("/api/sheets/append", async (req: Request, res: Response) => {
   try {
     const { values } = req.body;

@@ -823,6 +823,13 @@ export default function App() {
     setHistory(updated);
     localStorage.setItem("aksara_history", JSON.stringify(updated));
     showToast("Hasil transliterasi berhasil disimpan ke Riwayat!");
+
+    // Tambahkan ke antrean sinkronisasi berkala back-end
+    fetch("/api/sheets/add-queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item, direction })
+    }).catch(err => console.error("Gagal mengirim ke antrean back-end:", err));
   };
 
   // Delete history item
@@ -868,13 +875,20 @@ export default function App() {
         const updated = [item, ...prev];
         localStorage.setItem("aksara_history", JSON.stringify(updated));
         
+        // Tambahkan ke antrean sinkronisasi berkala back-end
+        fetch("/api/sheets/add-queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ item, direction })
+        }).catch(err => console.error("Gagal mengirim ke antrean back-end:", err));
+
         return updated;
       });
 
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [latinInput, finalArabicOutput, useAI, aiLoading, preset, userIp, userLocation]);
+  }, [latinInput, finalArabicOutput, useAI, aiLoading, preset, userIp, userLocation, direction]);
 
   // Copy current result to clipboard
   const copyToClipboard = (textToCopy: string) => {
