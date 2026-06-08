@@ -294,7 +294,7 @@ app.post("/api/sheets/add-queue", (req: Request, res: Response) => {
     }
 
     const targetSpreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
-    const targetAppsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || "";
+    const targetAppsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzDFtcUGMExq9KeM-0g9z_Qqg8GXmzgNEl4pdrYpmex_P2gcSSIkn9F3DBxiCu-hLv7/exec";
 
     // Deteksi IP Address asli dari perangkat pengakses via headers atau socket
     const clientIpRaw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
