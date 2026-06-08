@@ -9,6 +9,57 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+// Centralized configuration fallback values for Google Apps Script sheet synchronizer
+const DEFAULT_SPREADSHEET_ID = "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
+const DEFAULT_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzDFtcUGMExq9KeM-0g9z_Qqg8GXmzgNEl4pdrYpmex_P2gcSSIkn9F3DBxiCu-hLv7/exec";
+
+// Helper to detect Google authenticated user email or any active session email from request headers
+function detectUserEmail(req: Request): string {
+  const headersToCheck = [
+    "x-goog-authenticated-user-email",
+    "x-user-email",
+    "x-forwarded-email",
+    "x-replit-user-email-address",
+    "x-replit-user-email"
+  ];
+
+  for (const headerName of headersToCheck) {
+    const value = req.headers[headerName];
+    if (typeof value === "string" && value.trim()) {
+      const emailMatch = value.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+      if (emailMatch) {
+         return emailMatch[0];
+      }
+    }
+  }
+
+  // Fallback scan all other headers for any valid email
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (typeof value === "string") {
+      const emailMatch = value.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+      if (emailMatch) {
+        return emailMatch[0];
+      }
+    }
+  }
+
+  return "";
+}
+
+// Helper to get client IP on the server
+function getClientIp(req: Request): string {
+  const clientIpRaw = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket.remoteAddress || "";
+  if (typeof clientIpRaw === "string" && clientIpRaw.trim()) {
+    const parts = clientIpRaw.split(",");
+    const ip = parts[0].trim();
+    if (ip === "::1" || ip === "127.0.0.1" || ip === "::ffff:127.0.0.1") {
+      return "";
+    }
+    return ip;
+  }
+  return "";
+}
+
 app.use(express.json());
 
 // Lazy-loaded Gemini AI client helper to avoid crashes if API key is not present initially
@@ -232,8 +283,8 @@ let lastSyncStatus = {
 async function flushSheetsQueue() {
   if (sheetQueue.length === 0) return;
 
-  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
-  const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || "";
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+  const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL;
 
   if (!appsScriptUrl || appsScriptUrl.trim() === "") {
     console.warn(`[Sheets Sync] GOOGLE_APPS_SCRIPT_URL tidak dikonfigurasi. ${sheetQueue.length} data riwayat dalam antrean ditahan.`);
@@ -293,25 +344,16 @@ app.post("/api/sheets/add-queue", (req: Request, res: Response) => {
       return res.status(400).json({ error: "Item riwayat diperlukan." });
     }
 
-    const targetSpreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
-    const targetAppsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzDFtcUGMExq9KeM-0g9z_Qqg8GXmzgNEl4pdrYpmex_P2gcSSIkn9F3DBxiCu-hLv7/exec";
+    const targetSpreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+    const targetAppsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL;
 
     // Deteksi IP Address asli dari perangkat pengakses via headers atau socket
-    const clientIpRaw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
-    const clientIp = typeof clientIpRaw === "string"
-      ? clientIpRaw.split(",")[0].trim()
-      : Array.isArray(clientIpRaw)
-        ? clientIpRaw[0].trim()
-        : "";
+    const serverDetectedIp = getClientIp(req);
 
     // Ambil IP address dari item riwayat atau timpa jika nilainya masih memuat status memuat
     let ipToUse = item.ipAddress;
     if (!ipToUse || ipToUse.includes("Memuat") || ipToUse === "180.252.80.45" || ipToUse === "127.0.0.1" || ipToUse === "localhost") {
-      if (clientIp && clientIp !== "::1" && clientIp !== "127.0.0.1" && clientIp !== "::ffff:127.0.0.1") {
-        ipToUse = clientIp;
-      } else {
-        ipToUse = item.ipAddress || "180.252.80.45"; // fallback jika tetap lokal
-      }
+      ipToUse = serverDetectedIp || item.ipAddress || "180.252.80.45"; // fallback jika tetap lokal
     }
 
     // Ambil lokasi pengakses, pertahankan atau berikan default bernilai aman
@@ -321,7 +363,8 @@ app.post("/api/sheets/add-queue", (req: Request, res: Response) => {
     }
 
     // Dapatkan email pengguna yang berinteraksi
-    const userToUse = item.user || "agongpor@gmail.com";
+    const detectedEmail = detectUserEmail(req);
+    const userToUse = detectedEmail || item.user || "agongpor@gmail.com";
 
     // Susun format baris baru sesuai dengan pemetaan kolom yang rapi
     const row = [
@@ -345,7 +388,7 @@ app.post("/api/sheets/add-queue", (req: Request, res: Response) => {
       message: "Data riwayat berhasil ditambahkan ke antrean sinkronisasi berkala berkemampuan multi-koneksi hulu.",
       queueSize: sheetQueue.length,
       intervalSeconds: SYNC_INTERVAL_MS / 1000,
-      clientIpDetected: clientIp,
+      clientIpDetected: serverDetectedIp || req.socket.remoteAddress,
       ipUsed: ipToUse,
       userUsed: userToUse,
       locationUsed: locationToUse,
@@ -360,15 +403,20 @@ app.post("/api/sheets/add-queue", (req: Request, res: Response) => {
 
 // Endpoint untuk mengecek status sync terpusat
 app.get("/api/sheets/status", (req: Request, res: Response) => {
+  const activeEmail = detectUserEmail(req);
+  const detectedIp = getClientIp(req);
+
   return res.json({
     queueSize: sheetQueue.length,
     intervalMs: SYNC_INTERVAL_MS,
     lastSyncStatus,
+    activeUserEmail: activeEmail || "agongpor@gmail.com",
+    detectedIp: detectedIp || "180.252.80.45",
     configured: {
-      spreadsheetId: !!process.env.GOOGLE_SPREADSHEET_ID,
-      appsScriptUrl: !!process.env.GOOGLE_APPS_SCRIPT_URL,
-      spreadsheetIdValue: process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0",
-      appsScriptUrlValue: process.env.GOOGLE_APPS_SCRIPT_URL || ""
+      spreadsheetId: !!(process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID),
+      appsScriptUrl: !!(process.env.GOOGLE_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL),
+      spreadsheetIdValue: process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID,
+      appsScriptUrlValue: process.env.GOOGLE_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL
     }
   });
 });
@@ -378,8 +426,8 @@ app.post("/api/sheets/append", async (req: Request, res: Response) => {
     const { values } = req.body;
 
     // Use default Spreadsheet ID provided by the user, or load from environment
-    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
-    const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
+    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+    const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL;
 
     if (!values || !Array.isArray(values) || values.length === 0) {
       return res.status(400).json({ error: "Data 'values' (baris-baris data) diperlukan." });

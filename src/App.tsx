@@ -125,6 +125,27 @@ export default function App() {
             if (data.configured) {
               setServerConfigured(data.configured);
             }
+            // Auto-detect and populate active Google user email from headers
+            if (data.activeUserEmail) {
+              setUserEmail(prev => {
+                const currentFromStorage = localStorage.getItem("aksara_user_email");
+                if (!currentFromStorage || prev === "Pengguna Pegon" || prev === "Anonim") {
+                  localStorage.setItem("aksara_user_email", data.activeUserEmail);
+                  setPdfAuthor(data.activeUserEmail);
+                  return data.activeUserEmail;
+                }
+                return prev;
+              });
+            }
+            // Populate server-detected IP address if local API failed or is loading
+            if (data.detectedIp) {
+              setUserIp(prev => {
+                if (prev === "Memuat IP..." || prev === "127.0.0.1" || prev === "") {
+                  return data.detectedIp;
+                }
+                return prev;
+              });
+            }
           }
         })
         .catch(err => console.error("Gagal menjangkau status sinkronisasi server:", err));
