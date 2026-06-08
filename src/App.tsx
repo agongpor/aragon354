@@ -86,7 +86,28 @@ export default function App() {
   // Print-ready preview modal state
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [pdfTitle, setPdfTitle] = useState("DOKUMEN TRANSLITERASI RESMI");
-  const [pdfAuthor, setPdfAuthor] = useState("agongpor@gmail.com");
+  const [userEmail, setUserEmail] = useState(() => localStorage.getItem("aksara_user_email") || "agongpor@gmail.com");
+  const [pdfAuthor, setPdfAuthor] = useState(() => localStorage.getItem("aksara_user_email") || "agongpor@gmail.com");
+  const [spreadsheetId, setSpreadsheetId] = useState(() => localStorage.getItem("aksara_spreadsheet_id") || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0");
+  const [appsScriptUrl, setAppsScriptUrl] = useState(() => localStorage.getItem("aksara_apps_script_url") || "");
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [queueSize, setQueueSize] = useState(0);
+  const [tempUserEmail, setTempUserEmail] = useState("");
+  const [tempSpreadsheetId, setTempSpreadsheetId] = useState("");
+  const [tempAppsScriptUrl, setTempAppsScriptUrl] = useState("");
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState("");
+
+  // Sync temp variables when modal opens
+  useEffect(() => {
+    if (showSettingsModal) {
+      setTempUserEmail(userEmail);
+      setTempSpreadsheetId(spreadsheetId);
+      setTempAppsScriptUrl(appsScriptUrl);
+      setTestResult("");
+    }
+  }, [showSettingsModal, userEmail, spreadsheetId, appsScriptUrl]);
+
   const [pdfNotes, setPdfNotes] = useState("Hasil alih aksara dari karakter Latin menuju ejaan Arab yang sah berdasarkan referensi linguistik kustom.");
   const [printDate, setPrintDate] = useState(() => {
     const now = new Date();
@@ -814,7 +835,7 @@ export default function App() {
       arabic: activeOutput,
       preset: preset,
       notes: useAI ? `Asisten Cerdas AI (Terjemahan)` : `Mesin Aturan Realtime`,
-      user: "agongpor@gmail.com",
+      user: userEmail,
       location: userLocation,
       ipAddress: userIp
     };
@@ -828,8 +849,15 @@ export default function App() {
     fetch("/api/sheets/add-queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item, direction })
-    }).catch(err => console.error("Gagal mengirim ke antrean back-end:", err));
+      body: JSON.stringify({ item, direction, spreadsheetId, appsScriptUrl })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.queueSize !== undefined) {
+        setQueueSize(data.queueSize);
+      }
+    })
+    .catch(err => console.error("Gagal mengirim ke antrean back-end:", err));
   };
 
   // Delete history item
@@ -862,7 +890,7 @@ export default function App() {
         arabic: activeOutput,
         preset: preset,
         notes: useAI ? `Asisten Cerdas AI (Otomatis)` : `Mesin Aturan (Otomatis)`,
-        user: "agongpor@gmail.com",
+        user: userEmail,
         location: userLocation,
         ipAddress: userIp
       };
@@ -879,8 +907,15 @@ export default function App() {
         fetch("/api/sheets/add-queue", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ item, direction })
-        }).catch(err => console.error("Gagal mengirim ke antrean back-end:", err));
+          body: JSON.stringify({ item, direction, spreadsheetId, appsScriptUrl })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.queueSize !== undefined) {
+            setQueueSize(data.queueSize);
+          }
+        })
+        .catch(err => console.error("Gagal mengirim ke antrean back-end:", err));
 
         return updated;
       });
@@ -888,7 +923,7 @@ export default function App() {
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [latinInput, finalArabicOutput, useAI, aiLoading, preset, userIp, userLocation, direction]);
+  }, [latinInput, finalArabicOutput, useAI, aiLoading, preset, userIp, userLocation, direction, userEmail, spreadsheetId, appsScriptUrl]);
 
   // Copy current result to clipboard
   const copyToClipboard = (textToCopy: string) => {
@@ -1020,14 +1055,38 @@ export default function App() {
           <div className="flex items-center gap-4 w-full lg:w-auto justify-center lg:justify-end">
             {/* Environmental parameters & information tags */}
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-slate-600">
+              <button 
+                onClick={() => setShowSettingsModal(true)}
+                className="bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 font-semibold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all cursor-pointer shadow-3xs"
+                title="Buka Pengaturan Sinkronisasi & Akun Perangkat"
+              >
+                <Settings className={`w-3.5 h-3.5 ${queueSize > 0 ? "animate-spin text-red-500" : ""}`} />
+                <span>Pengaturan Sync</span>
+                {queueSize > 0 && (
+                  <span className="bg-red-500 text-white rounded-full text-[9px] px-1.5 py-0.5 font-bold animate-pulse">
+                    {queueSize} pending
+                  </span>
+                )}
+              </button>
+              
+              <div 
+                onClick={() => setShowSettingsModal(true)}
+                className="bg-slate-100 border border-slate-200 hover:bg-slate-200 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-slate-600 cursor-pointer transition-colors"
+                title="Klik untuk mengubah Akun Pengguna"
+              >
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"></span>
-                <span className="font-mono">User: agongpor@gmail.com</span>
+                <span className="font-mono">User: {userEmail}</span>
               </div>
-              <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-slate-600">
+
+              <div 
+                onClick={() => setShowSettingsModal(true)}
+                className="bg-slate-100 border border-slate-200 hover:bg-slate-200 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-slate-600 cursor-pointer transition-colors"
+                title={`Lokasi: ${userLocation}. Klik untuk mengubah.`}
+              >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span className="font-mono" title={userLocation}>IP: {userIp}</span>
+                <span className="font-mono">IP: {userIp}</span>
               </div>
+
               <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center space-x-2 text-slate-600">
                 <Clock className="w-3.5 h-3.5 text-indigo-600" />
                 <span className="font-mono min-w-[130px]">{currentTime || "Memuat..."}</span>
@@ -2111,7 +2170,7 @@ export default function App() {
       {/* FOOTER Credits no-print */}
       <footer className="max-w-7xl mx-auto text-center mt-12 text-slate-400 text-xs no-print space-y-2">
         <p className="font-mono">
-          © {new Date().getFullYear()} Aplikasi Transliterasi Aksara Arab Indonesia. Semua Hak Dilindungi.
+          © {new Date().getFullYear()} Aplikasi Penulisan Arab Pegon. Semua Hak Dilindungi.
         </p>
         <p className="flex justify-center items-center gap-1">
           Ditenagai oleh <span className="font-mono text-indigo-800 font-semibold bg-indigo-50 px-1 rounded">Vite React</span> dan <span className="font-mono text-amber-700 font-semibold bg-amber-50 inline-flex items-center gap-0.5 px-1 rounded"><Sparkles className="w-2.5 h-2.5 inline" /> Gemini 3.5-Flash</span>
@@ -2410,6 +2469,171 @@ export default function App() {
             <Copy className="w-3.5 h-3.5 text-slate-400" />
             <span>Salin Seluruh Teks</span>
           </button>
+        </div>
+      )}
+
+      {/* Google Sheets and Device Connection settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto no-print animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl border border-slate-300 animate-scale-in">
+            
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-slate-100 p-5 px-6 flex justify-between items-center border-b border-slate-800">
+              <div className="flex items-center space-x-2.5">
+                <Settings className="w-5 h-5 text-indigo-400 animate-spin-slow" />
+                <h3 className="font-display font-semibold text-sm md:text-base text-slate-200">
+                  Pengaturan Sinkronisasi & Perangkat
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="text-slate-400 hover:text-white font-bold text-xs bg-slate-800 hover:bg-slate-750 px-3 py-1.5 rounded-xl cursor-pointer transition-colors"
+              >
+                Batal
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-5 text-xs text-slate-705">
+              <p className="text-slate-500 leading-relaxed text-[11px]">
+                Sesuaikan profil perangkat Anda dan integrasikan dengan Google Sheet pribadi Anda agar riwayat alih aksara secara berkala terunggah otomatis di latar belakang.
+              </p>
+
+              {/* 1. Akun Pengguna / User Email */}
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 uppercase font-mono font-semibold tracking-wide">
+                  Akun Pengguna (Email / Nama)
+                </label>
+                <input
+                  type="text"
+                  value={tempUserEmail}
+                  onChange={(e) => setTempUserEmail(e.target.value)}
+                  placeholder="Masukkan email atau nama Anda"
+                  className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 font-medium transition-all text-slate-800"
+                />
+                <p className="text-slate-400 text-[10px]">
+                  Terdeteksi dari browser Anda yang aktif sekarang. Contoh: <span className="font-mono bg-slate-100 px-1 rounded">agongpor@gmail.com</span>
+                </p>
+              </div>
+
+              {/* 2. Google Spreadsheet ID */}
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 uppercase font-mono font-semibold tracking-wide">
+                  ID Google Spreadsheet
+                </label>
+                <input
+                  type="text"
+                  value={tempSpreadsheetId}
+                  onChange={(e) => setTempSpreadsheetId(e.target.value)}
+                  placeholder="ID Spreadsheet Anda"
+                  className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 font-mono transition-all text-slate-800"
+                />
+                <p className="text-slate-400 text-[10px] leading-relaxed">
+                  Dapat diambil dari URL Spreadsheet Anda setelah <strong className="font-mono">/d/</strong> hingga sebelum <strong className="font-mono">/edit</strong>.
+                </p>
+              </div>
+
+              {/* 3. Google Apps Script Web App URL */}
+              <div className="space-y-1.5">
+                <label className="block text-slate-600 uppercase font-mono font-semibold tracking-wide">
+                  URL Google Apps Script Web App
+                </label>
+                <input
+                  type="url"
+                  value={tempAppsScriptUrl}
+                  onChange={(e) => setTempAppsScriptUrl(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="w-full bg-slate-50 hover:bg-slate-100/50 focus:bg-white border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl p-3 font-mono transition-all text-slate-800"
+                />
+                <p className="text-slate-400 text-[10px] leading-relaxed">
+                  PENTING: Salin kode makro di <code className="bg-slate-100 px-1 rounded font-mono">google_apps_script.js</code> lalu deploy sebagai <strong>Web App</strong> dengan akses <strong>"Anyone"</strong>. Tempelkan tautan <code className="bg-slate-100 px-1 rounded font-mono">/exec</code> di sini.
+                </p>
+              </div>
+
+              {/* Quick actions & tests */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-700 block text-[11px]">Uji Tautan Web App</span>
+                    <span className="text-slate-400 text-[10px]">Cek respon konektivitas dari Google.</span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isTestingConnection}
+                    onClick={async () => {
+                      if (!tempAppsScriptUrl) {
+                        setTestResult("❌ Error: Harap isi kolom URL Google Apps Script!");
+                        return;
+                      }
+                      setIsTestingConnection(true);
+                      setTestResult("Menghubungi Google Apps Script...");
+                      try {
+                        const pingUrl = `${tempAppsScriptUrl}${tempAppsScriptUrl.includes("?") ? "&" : "?"}ping=1`;
+                        const res = await fetch(pingUrl, { method: "GET", mode: "no-cors" });
+                        setTestResult("✅ Sukses terhubung! Hubungan Web App siap diakses.");
+                      } catch (err: any) {
+                        setTestResult(`❌ Gagal terhubung: ${err.message}. Periksa alamat URL.`);
+                      } finally {
+                        setIsTestingConnection(false);
+                      }
+                    }}
+                    className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-semibold font-sans px-3 py-1.5 rounded-xl cursor-pointer transition-colors shrink-0"
+                  >
+                    {isTestingConnection ? "Uji..." : "Mulai Uji"}
+                  </button>
+                </div>
+                {testResult && (
+                  <div className={`p-2.5 rounded-xl font-mono text-[10px] leading-relaxed border ${
+                    testResult.startsWith("✅") 
+                      ? "bg-emerald-50 border-emerald-100 text-emerald-800" 
+                      : testResult.startsWith("❌") 
+                        ? "bg-red-50 border-red-100 text-red-700" 
+                        : "bg-amber-50 border-amber-100 text-amber-850"
+                  }`}>
+                    {testResult}
+                  </div>
+                )}
+              </div>
+
+              {/* Queue status information */}
+              <div className="flex items-center justify-between bg-indigo-50/55 p-3 rounded-xl border border-indigo-100 text-indigo-900 tracking-wide text-[11px]">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                  <span>Menunggu sinkronisasi berkala (15s):</span>
+                </div>
+                <strong>{queueSize} Baris Riwayat</strong>
+              </div>
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex space-x-3 justify-end">
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-750 font-semibold px-4 py-2 rounded-xl cursor-pointer transition-all text-xs"
+              >
+                Tutup
+              </button>
+              <button
+                onClick={() => {
+                  setUserEmail(tempUserEmail);
+                  setPdfAuthor(tempUserEmail);
+                  setSpreadsheetId(tempSpreadsheetId);
+                  setAppsScriptUrl(tempAppsScriptUrl);
+                  
+                  localStorage.setItem("aksara_user_email", tempUserEmail);
+                  localStorage.setItem("aksara_spreadsheet_id", tempSpreadsheetId);
+                  localStorage.setItem("aksara_apps_script_url", tempAppsScriptUrl);
+                  
+                  setShowSettingsModal(false);
+                  showToast("Pengaturan sync disimpan di perangkat ini!");
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2 rounded-xl cursor-pointer transition-all text-xs shadow-md"
+              >
+                Simpan & Aktifkan
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 

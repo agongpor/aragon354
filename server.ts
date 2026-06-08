@@ -215,46 +215,68 @@ Harap berikan respons sebagai objek JSON dengan format schema berikut:
 });
 
 // API endpoint for Google Sheets synchronization leveraging Google Apps Script (backend proxy)
-// API endpoint for Google Sheets synchronization leveraging Google Apps Script (backend proxy)
-let sheetQueue: any[][] = [];
-const SYNC_INTERVAL_MS = 30000; // Sinkronisasi setiap 30 detik secara berkala
+interface QueueItem {
+  row: any[];
+  appsScriptUrl: string;
+  spreadsheetId: string;
+}
+
+let sheetQueue: QueueItem[] = [];
+const SYNC_INTERVAL_MS = 15000; // Sinkronisasi setiap 15 detik secara berkala
 
 async function flushSheetsQueue() {
   if (sheetQueue.length === 0) return;
 
-  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
-  const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
-
-  if (!appsScriptUrl) {
-    console.warn("[Sheets Sync] GOOGLE_APPS_SCRIPT_URL tidak dikonfigurasi. Queue dilewati.");
-    return;
-  }
-
-  const batchToUpload = [...sheetQueue];
+  const currentQueue = [...sheetQueue];
   sheetQueue = [];
 
-  try {
-    console.log(`[Sheets Sync] Mengunggah secara berkala ${batchToUpload.length} baris data ke Google-Sheets...`);
-    const response = await fetch(appsScriptUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        spreadsheetId,
-        values: batchToUpload,
-      }),
-    });
+  // Group by appsScriptUrl and spreadsheetId to support multi-destination uploads
+  const groups: { [key: string]: { appsScriptUrl: string; spreadsheetId: string; rows: any[][] } } = {};
 
-    if (!response.ok) {
-      throw new Error(`Apps Script mengembalikan status ${response.status}`);
+  for (const item of currentQueue) {
+    const key = `${item.appsScriptUrl}|||${item.spreadsheetId}`;
+    if (!groups[key]) {
+      groups[key] = {
+        appsScriptUrl: item.appsScriptUrl,
+        spreadsheetId: item.spreadsheetId,
+        rows: []
+      };
     }
-    const result = await response.json().catch(() => ({ success: true }));
-    console.log(`[Sheets Sync] Sukses menyinkronkan berkala ${batchToUpload.length} baris.`, result);
-  } catch (error: any) {
-    console.error("[Sheets Sync] Gagal menyinkronkan berkala, mengembalikan ke antrean:", error.message);
-    // Kembalikan data yang gagal ke depan antrean
-    sheetQueue = [...batchToUpload, ...sheetQueue];
+    groups[key].rows.push(item.row);
+  }
+
+  for (const key of Object.keys(groups)) {
+    const { appsScriptUrl, spreadsheetId, rows } = groups[key];
+
+    if (!appsScriptUrl || appsScriptUrl.trim() === "") {
+      console.warn(`[Sheets Sync] GOOGLE_APPS_SCRIPT_URL tidak dikonfigurasi untuk spreadsheet ${spreadsheetId}. ${rows.length} data riwayat dilewati.`);
+      continue;
+    }
+
+    try {
+      console.log(`[Sheets Sync] Mengunggah secara berkala hulu ${rows.length} baris data ke Google Sheet (${spreadsheetId})...`);
+      const response = await fetch(appsScriptUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          spreadsheetId,
+          values: rows,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Apps Script mengembalikan status ${response.status}`);
+      }
+      const result = await response.json().catch(() => ({ success: true }));
+      console.log(`[Sheets Sync] Sukses menyinkronkan berkala hulu ${rows.length} baris ke Google Sheet.`, result);
+    } catch (error: any) {
+      console.error("[Sheets Sync] Gagal menyinkronkan berkala ke Google Sheet, mengembalikan ke antrean:", error.message);
+      // Kembalikan baris data yang gagal ke antrean
+      const returnedItems = rows.map(row => ({ row, appsScriptUrl, spreadsheetId }));
+      sheetQueue = [...returnedItems, ...sheetQueue];
+    }
   }
 }
 
@@ -264,11 +286,42 @@ setInterval(flushSheetsQueue, SYNC_INTERVAL_MS);
 // API endpoint untuk menambah riwayat langsung ke dalam antrean back-end
 app.post("/api/sheets/add-queue", (req: Request, res: Response) => {
   try {
-    const { item, direction } = req.body;
+    const { item, direction, spreadsheetId, appsScriptUrl } = req.body;
 
     if (!item) {
       return res.status(400).json({ error: "Item riwayat diperlukan." });
     }
+
+    // Tentukan parameter hulu - utamakan konfigurasi dinamis yang dikirim perangkat/client
+    const targetSpreadsheetId = spreadsheetId || process.env.GOOGLE_SPREADSHEET_ID || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
+    const targetAppsScriptUrl = appsScriptUrl || process.env.GOOGLE_APPS_SCRIPT_URL || "";
+
+    // Deteksi IP Address asli dari perangkat pengakses via headers atau socket
+    const clientIpRaw = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
+    const clientIp = typeof clientIpRaw === "string"
+      ? clientIpRaw.split(",")[0].trim()
+      : Array.isArray(clientIpRaw)
+        ? clientIpRaw[0].trim()
+        : "";
+
+    // Ambil IP address dari item riwayat atau timpa jika nilainya masih memuat status memuat
+    let ipToUse = item.ipAddress;
+    if (!ipToUse || ipToUse.includes("Memuat") || ipToUse === "180.252.80.45" || ipToUse === "127.0.0.1" || ipToUse === "localhost") {
+      if (clientIp && clientIp !== "::1" && clientIp !== "127.0.0.1" && clientIp !== "::ffff:127.0.0.1") {
+        ipToUse = clientIp;
+      } else {
+        ipToUse = item.ipAddress || "180.252.80.45"; // fallback jika tetap lokal
+      }
+    }
+
+    // Ambil lokasi pengakses, pertahankan atau berikan default bernilai aman
+    let locationToUse = item.location;
+    if (!locationToUse || locationToUse.includes("Memuat") || locationToUse === "Jakarta, Indonesia") {
+      locationToUse = item.location || "Jakarta, Indonesia";
+    }
+
+    // Dapatkan email pengguna yang berinteraksi
+    const userToUse = item.user || "agongpor@gmail.com";
 
     // Susun format baris baru sesuai dengan pemetaan kolom yang rapi
     // Kolom A: Tanggal & Jam
@@ -291,17 +344,28 @@ app.post("/api/sheets/add-queue", (req: Request, res: Response) => {
       (item.latin || "").length.toString(),
       (item.latin || "").trim().split(/\s+/).filter(Boolean).length.toString(),
       item.notes || "Mesin Aturan",
-      item.user || "agongpor@gmail.com",
-      item.location || "Jakarta, Indonesia",
-      item.ipAddress || "180.252.80.45"
+      userToUse,
+      locationToUse,
+      ipToUse
     ];
 
-    sheetQueue.push(row);
+    sheetQueue.push({
+      row,
+      appsScriptUrl: targetAppsScriptUrl,
+      spreadsheetId: targetSpreadsheetId
+    });
+
     return res.json({
       success: true,
-      message: "Data riwayat berhasil ditambahkan ke antrean sinkronisasi berkala back-end.",
+      message: "Data riwayat berhasil ditambahkan ke antrean sinkronisasi berkala berkemampuan multi-koneksi hulu.",
       queueSize: sheetQueue.length,
-      intervalSeconds: SYNC_INTERVAL_MS / 1000
+      intervalSeconds: SYNC_INTERVAL_MS / 1000,
+      clientIpDetected: clientIp,
+      ipUsed: ipToUse,
+      userUsed: userToUse,
+      locationUsed: locationToUse,
+      spreadsheetIdUsed: targetSpreadsheetId,
+      hasAppsScriptUrl: !!targetAppsScriptUrl
     });
   } catch (err: any) {
     console.error("Gagal menambahkan ke antrean:", err);
