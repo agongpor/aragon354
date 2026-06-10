@@ -391,9 +391,55 @@ app.get("/api/sheets/status", (req: Request, res: Response) => {
   });
 });
 
+// Endpoint untuk mengambil/download seluruh referensi & kamus kustom dari Google Sheets secara transparan di back-end
+app.get("/api/sheets/get-rules", async (req: Request, res: Response) => {
+  try {
+    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+    const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL;
+
+    if (!appsScriptUrl || appsScriptUrl.trim() === "") {
+      return res.json({ success: true, mappings: [] });
+    }
+
+    const fetchUrl = `${appsScriptUrl}?action=read-rules&spreadsheetId=${spreadsheetId}`;
+    const response = await fetch(fetchUrl);
+    if (!response.ok) {
+      throw new Error(`Google Apps Script mengembalikan status ${response.status}`);
+    }
+    const data = await response.json();
+    return res.json(data);
+  } catch (error: any) {
+    console.error("[Backend Get Rules] Gagal membaca aturan kustom:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Endpoint untuk mengambil/download semua custom settings dari Google Sheets secara transparan di back-end
+app.get("/api/sheets/get-settings", async (req: Request, res: Response) => {
+  try {
+    const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+    const appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL;
+
+    if (!appsScriptUrl || appsScriptUrl.trim() === "") {
+      return res.json({ success: true, settings: {} });
+    }
+
+    const fetchUrl = `${appsScriptUrl}?action=read-settings&spreadsheetId=${spreadsheetId}`;
+    const response = await fetch(fetchUrl);
+    if (!response.ok) {
+      throw new Error(`Google Apps Script mengembalikan status ${response.status}`);
+    }
+    const data = await response.json();
+    return res.json(data);
+  } catch (error: any) {
+    console.error("[Backend Get Settings] Gagal membaca pengaturan kustom:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post("/api/sheets/append", async (req: Request, res: Response) => {
   try {
-    const { values } = req.body;
+    const { values, sheetName, clearSheet } = req.body;
 
     // Use default Spreadsheet ID provided by the user, or load from environment
     const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
@@ -421,6 +467,8 @@ app.post("/api/sheets/append", async (req: Request, res: Response) => {
       body: JSON.stringify({
         spreadsheetId,
         values,
+        sheetName,
+        clearSheet
       }),
     });
 

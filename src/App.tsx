@@ -160,6 +160,322 @@ export default function App() {
     }
   };
 
+  const [isSyncingRules, setIsSyncingRules] = useState(false);
+
+  // Helper to synchronize all custom references and vocabulary to the dedicated 'Referensi & Kamus Kustom' tab in the Google Sheet (Invisibly & automatically)
+  const syncRulesToSheetsDirect = async (mappingsToSync: CustomMapping[]) => {
+    // We only synchronize custom user mappings (i.e. of the current preset where isPreset is false)
+    const customRules = mappingsToSync.filter(m => !m.isPreset);
+    const sheetName = "Referensi & Kamus Kustom";
+    
+    setIsSyncingRules(true);
+    const timeString = new Date().toLocaleString("id-ID");
+    const rows = customRules.map(m => {
+      let typeLabel = "Karakter Tunggal";
+      if (m.type === "digraph") typeLabel = "Digraf / Suku Kata";
+      if (m.type === "word") typeLabel = "Kamus Kata (Kosakata)";
+
+      return [
+        timeString,
+        m.id,
+        typeLabel,
+        m.latin,
+        m.arabic,
+        m.description || `Referensi kustom untuk ${m.latin}`,
+        "Kustom Pengguna"
+      ];
+    });
+
+    try {
+      // If there are no custom rules yet, we empty the sheet contents by passing a dummy informational row
+      const payloadRows = rows.length > 0 ? rows : [
+        [timeString, "-", "-", "Tidak Ada Aturan Kustom", "-", "Silakan tambahkan aturan atau kamus kata kustom Anda", "Sistem Bersih"]
+      ];
+
+      if (!isStaticDeployment) {
+        // Mode Server: Gunakan Express endpoint proxy dengan parameter tab kustom
+        const response = await fetch("/api/sheets/append", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            values: payloadRows,
+            sheetName,
+            clearSheet: true
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          console.log(`[Automatic Rule Sync] ${customRules.length} aturan kustom berhasil disinkronkan ke Google Sheets.`);
+        }
+      } else {
+        // Mode Statik: Akses Apps Script langsung menggunakan POST (no-cors)
+        const spreadsheetId = serverConfigured.spreadsheetIdValue || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
+        const appsScriptUrl = serverConfigured.appsScriptUrlValue || "https://script.google.com/macros/s/AKfycbzDFtcUGMExq9KeM-0g9z_Qqg8GXmzgNEl4pdrYpmex_P2gcSSIkn9F3DBxiCu-hLv7/exec";
+
+        await fetch(appsScriptUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            spreadsheetId,
+            values: payloadRows,
+            sheetName,
+            clearSheet: true
+          })
+        });
+        console.log(`[Automatic Rule Sync] ${customRules.length} aturan kustom disinkronkan langsung via Apps Script.`);
+      }
+    } catch (err: any) {
+      console.warn("[Automatic Rule Sync] Gagal menyinkronkan referensi kustom secara real-time:", err);
+    } finally {
+      setIsSyncingRules(false);
+    }
+  };
+
+  // Helper to synchronize all settings in real-time to 'Pengaturan Kustom' sheet tab
+  const syncSettingsToSheetsDirect = async (
+    ga: "dot" | "plain",
+    ng: "dot" | "plain",
+    p: "dot" | "plain",
+    ny: "ya" | "ya_dot" | "nya"
+  ) => {
+    const sheetName = "Pengaturan Kustom";
+    const timeString = new Date().toLocaleString("id-ID");
+
+    const rows = [
+      [timeString, "pegon_ga_style", ga, ga === "dot" ? "Kaf 1 Titik Bawah (ࢴ)" : "Kaf Polos (ك)"],
+      [timeString, "pegon_ng_style", ng, ng === "dot" ? "ڠ (Nga 3 Titik)" : "ع (Ain Polos)"],
+      [timeString, "pegon_p_style", p, p === "dot" ? "Pa 3 Titik (ڤ)" : "Fa Polos (ف)"],
+      [timeString, "pegon_ny_style", ny, ny === "ya" ? "Ya Polos (ي)" : ny === "ya_dot" ? "Nya 1 Titik (ۑ)" : "Nya 3 Titik (ڽ)"]
+    ];
+
+    try {
+      if (!isStaticDeployment) {
+        await fetch("/api/sheets/append", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            values: rows,
+            sheetName,
+            clearSheet: true
+          })
+        });
+      } else {
+        const spreadsheetId = serverConfigured.spreadsheetIdValue || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
+        const appsScriptUrl = serverConfigured.appsScriptUrlValue || "https://script.google.com/macros/s/AKfycbzDFtcUGMExq9KeM-0g9z_Qqg8GXmzgNEl4pdrYpmex_P2gcSSIkn9F3DBxiCu-hLv7/exec";
+
+        await fetch(appsScriptUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({
+            spreadsheetId,
+            values: rows,
+            sheetName,
+            clearSheet: true
+          })
+        });
+      }
+      console.log("[Settings Sync] Pengaturan kustom berhasil disinkronkan ke Google Sheets.");
+    } catch (err) {
+      console.warn("[Settings Sync] Gagal menyinkronkan pengaturan kustom secara real-time:", err);
+    }
+  };
+
+  // Automatically download all custom rules from Google Sheets on app startup
+  const downloadRulesFromSheets = async () => {
+    try {
+      console.log("[Setup Sync] Mengunduh referensi & kamus kustom dari Google Sheets secara otomatis...");
+      let fetchedMappings: CustomMapping[] = [];
+
+      if (!isStaticDeployment) {
+        // Mode Server: Ambil via proxy backend
+        const res = await fetch("/api/sheets/get-rules");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.mappings)) {
+            fetchedMappings = data.mappings;
+          }
+        }
+      } else {
+        // Mode Statik: Ambil langsung dari Apps Script
+        const spreadsheetId = serverConfigured.spreadsheetIdValue || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
+        const appsScriptUrl = serverConfigured.appsScriptUrlValue || "https://script.google.com/macros/s/AKfycbzDFtcUGMExq9KeM-0g9z_Qqg8GXmzgNEl4pdrYpmex_P2gcSSIkn9F3DBxiCu-hLv7/exec";
+        
+        if (appsScriptUrl && appsScriptUrl.startsWith("https://")) {
+          const fetchUrl = `${appsScriptUrl}?action=read-rules&spreadsheetId=${spreadsheetId}`;
+          const res = await fetch(fetchUrl);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && Array.isArray(data.mappings)) {
+              fetchedMappings = data.mappings;
+            }
+          }
+        }
+      }
+
+      if (fetchedMappings.length > 0) {
+        console.log(`[Setup Sync] Berhasil memperbarui ${fetchedMappings.length} referensi kustom dari Google Sheets.`);
+        
+        setCustomMappings(prev => {
+          // Hanya gantikan yang bukan preset (isPreset !== true) dengan data terbaru dari Google Sheets
+          const presets = prev.filter(m => m.isPreset);
+          const combined = [...presets, ...fetchedMappings];
+          
+          // Simpan ke sessionStorage agar bisa diakses cepat tanpa permanen di disk
+          sessionStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(combined));
+          return combined;
+        });
+      }
+    } catch (err) {
+      console.warn("[Setup Sync] Gagal mengunduh referensi secara otomatis:", err);
+    }
+  };
+
+  // Automatically download all custom settings from Google Sheets on app startup
+  const downloadSettingsFromSheets = async () => {
+    try {
+      console.log("[Setup Sync] Mengunduh pengaturan kustom dari Google Sheets...");
+      let fetchedSettings: Record<string, string> = {};
+
+      if (!isStaticDeployment) {
+        const res = await fetch("/api/sheets/get-settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.settings) {
+            fetchedSettings = data.settings;
+          }
+        }
+      } else {
+        const spreadsheetId = serverConfigured.spreadsheetIdValue || "1HcV7XwWX1XXez4mZRTvKMHlThMVFxJ6OCOK2_aISGT0";
+        const appsScriptUrl = serverConfigured.appsScriptUrlValue || "https://script.google.com/macros/s/AKfycbzDFtcUGMExq9KeM-0g9z_Qqg8GXmzgNEl4pdrYpmex_P2gcSSIkn9F3DBxiCu-hLv7/exec";
+        
+        if (appsScriptUrl && appsScriptUrl.startsWith("https://")) {
+          const fetchUrl = `${appsScriptUrl}?action=read-settings&spreadsheetId=${spreadsheetId}`;
+          const res = await fetch(fetchUrl);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.settings) {
+              fetchedSettings = data.settings;
+            }
+          }
+        }
+      }
+
+      if (Object.keys(fetchedSettings).length > 0) {
+        console.log("[Setup Sync] Berhasil mengunduh pengaturan kustom:", fetchedSettings);
+        
+        let loadedGa = pegonGaStyle;
+        let loadedNg = pegonNgStyle;
+        let loadedP = pegonPStyle;
+        let loadedNy = pegonNyStyle;
+
+        if (fetchedSettings.pegon_ga_style) {
+          const gVal = fetchedSettings.pegon_ga_style as "dot" | "plain";
+          setPegonGaStyle(gVal);
+          localStorage.setItem("pegon_ga_style", gVal);
+          loadedGa = gVal;
+        }
+        if (fetchedSettings.pegon_ng_style) {
+          const ngVal = fetchedSettings.pegon_ng_style as "dot" | "plain";
+          setPegonNgStyle(ngVal);
+          localStorage.setItem("pegon_ng_style", ngVal);
+          loadedNg = ngVal;
+        }
+        if (fetchedSettings.pegon_p_style) {
+          const pVal = fetchedSettings.pegon_p_style as "dot" | "plain";
+          setPegonPStyle(pVal);
+          localStorage.setItem("pegon_p_style", pVal);
+          loadedP = pVal;
+        }
+        if (fetchedSettings.pegon_ny_style) {
+          const nyVal = fetchedSettings.pegon_ny_style as "ya" | "ya_dot" | "nya";
+          setPegonNyStyle(nyVal);
+          localStorage.setItem("pegon_ny_style", nyVal);
+          loadedNy = nyVal;
+        }
+
+        // Apply styles to custom mappings dynamically
+        setCustomMappings((prev) => 
+          prev.map((m) => {
+            if (m.latin === "g") {
+              return {
+                ...m,
+                arabic: loadedGa === "dot" ? "ࢴ" : "ك",
+                description: loadedGa === "dot" ? "Kaf dengan 1 titik di bawah untuk Ga" : "Kaf polos untuk Ga"
+              };
+            }
+            if (m.latin === "ng") {
+              return {
+                ...m,
+                arabic: loadedNg === "dot" ? "ڠ" : "ع",
+                description: loadedNg === "dot" ? "Huruf Ngo (Nga dengan 3 titik di atas)" : "Huruf Ain polos untuk Ng"
+              };
+            }
+            if (m.latin === "p") {
+              return {
+                ...m,
+                arabic: loadedP === "dot" ? "ڤ" : "ف",
+                description: loadedP === "dot" ? "Pê (Fa bertitik 3)" : "Huruf Fa polos untuk P"
+              };
+            }
+            if (m.latin === "ny") {
+              return {
+                ...m,
+                arabic: loadedNy === "ya" ? "ي" : loadedNy === "ya_dot" ? "ۑ" : "ڽ",
+                description: loadedNy === "ya" ? "Huruf Ya polos untuk Ny" : loadedNy === "ya_dot" ? "Nyeh (Nyeh bertitik 1 di bawah)" : "Nyah (Nyah bertitik 3 di bawah)"
+              };
+            }
+            return m;
+          })
+        );
+      }
+    } catch (err) {
+      console.warn("[Setup Sync] Gagal mengunduh pengaturan otomatis:", err);
+    }
+  };
+
+  // Trigger automatic download of custom mappings & settings on app startup as soon as backend environment/config is known
+  useEffect(() => {
+    if (serverConfigured.appsScriptUrlValue || isStaticDeployment) {
+      downloadRulesFromSheets();
+      downloadSettingsFromSheets();
+    }
+  }, [serverConfigured.appsScriptUrlValue, isStaticDeployment]);
+
+  // Clean up all custom rules on window close / unload to prevent persistent disks
+  useEffect(() => {
+    const handleUnloadClear = () => {
+      try {
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith("aksara_rules_")) {
+            sessionStorage.removeItem(key);
+          }
+        }
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("aksara_rules_")) {
+            localStorage.removeItem(key);
+          }
+        }
+        
+        // Remove settings so they are transient across window loads as requested
+        localStorage.removeItem("pegon_ga_style");
+        localStorage.removeItem("pegon_ng_style");
+        localStorage.removeItem("pegon_p_style");
+        localStorage.removeItem("pegon_ny_style");
+      } catch (err) {}
+    };
+
+    window.addEventListener("beforeunload", handleUnloadClear);
+    window.addEventListener("unload", handleUnloadClear);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnloadClear);
+      window.removeEventListener("unload", handleUnloadClear);
+    };
+  }, []);
+
   // Fetch server-side sync status periodically (5 seconds)
   useEffect(() => {
     // Clear any outdated/stale state from local storage on initial mount to recover server sync
@@ -354,7 +670,7 @@ export default function App() {
 
   // Load preset on change or initial mount with automatic 'g', 'ng', and 'p' migration to correct style if needed
   useEffect(() => {
-    const saved = localStorage.getItem(`aksara_rules_${preset}`);
+    const saved = sessionStorage.getItem(`aksara_rules_${preset}`);
     const gaStyle = (localStorage.getItem("pegon_ga_style") as "dot" | "plain") || "plain";
     const expectedArabic = gaStyle === "dot" ? "ࢴ" : "ك";
 
@@ -416,7 +732,7 @@ export default function App() {
           return m;
         });
         if (migrated) {
-          localStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(parsed));
+          sessionStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(parsed));
         }
         setCustomMappings(parsed);
       } catch (e) {
@@ -502,7 +818,7 @@ export default function App() {
     });
 
     setCustomMappings(defaultList);
-    localStorage.setItem(`aksara_rules_${targetPreset}`, JSON.stringify(defaultList));
+    sessionStorage.setItem(`aksara_rules_${targetPreset}`, JSON.stringify(defaultList));
     showToast("Referensi default Arab Pegon berhasil dimuat!");
   };
 
@@ -900,21 +1216,27 @@ export default function App() {
 
     const updated = [newRule, ...filtered];
     setCustomMappings(updated);
-    localStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(updated));
+    sessionStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(updated));
 
     // Reset Form
     setNewLatin("");
     setNewArabic("");
     setNewDescription("");
     showToast(`Aturan kustom "${newLatin} -> ${newArabic}" telah ditambahkan!`);
+    
+    // Automatically keep Google Sheet reference / dictionary tab synchronized
+    syncRulesToSheetsDirect(updated);
   };
 
   // Delete individual custom mapping
   const handleDeleteRule = (id: string, label: string) => {
     const updated = customMappings.filter(m => m.id !== id);
     setCustomMappings(updated);
-    localStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(updated));
+    sessionStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(updated));
     showToast(`Referensi "${label}" berhasil dihapus.`);
+    
+    // Automatically keep Google Sheet reference / dictionary tab synchronized
+    syncRulesToSheetsDirect(updated);
   };
 
   // Save current translation to history list
@@ -1071,8 +1393,11 @@ export default function App() {
         const parsed = JSON.parse(event.target?.result as string);
         if (Array.isArray(parsed.mappings)) {
           setCustomMappings(parsed.mappings);
-          localStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(parsed.mappings));
+          sessionStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(parsed.mappings));
           showToast(`Berhasil mengimpor ${parsed.mappings.length} aturan penulisan kustom!`);
+          
+          // Automatically keep Google Sheet reference / dictionary tab synchronized
+          syncRulesToSheetsDirect(parsed.mappings);
         } else {
           alert("Format file tidak valid. Pastikan file JSON berisi array 'mappings'.");
         }
@@ -1567,6 +1892,9 @@ export default function App() {
                         })
                       );
                       showToast(`Huruf Ga (g) diubah ke: ${val === "dot" ? "Kaf 1 Titik Bawah (ࢴ)" : "Kaf Polos (ك)"}`);
+                      
+                      // Sync to Google Sheets in real-time
+                      syncSettingsToSheetsDirect(val, pegonNgStyle, pegonPStyle, pegonNyStyle);
                     }}
                   >
                     <option value="dot">ࢴ (Titik)</option>
@@ -1598,6 +1926,9 @@ export default function App() {
                         })
                       );
                       showToast(`Huruf Nga (ng) diubah ke: ${val === "dot" ? "ڠ (Nga 3 Titik)" : "ع (Ain Polos)"}`);
+                      
+                      // Sync to Google Sheets in real-time
+                      syncSettingsToSheetsDirect(pegonGaStyle, val, pegonPStyle, pegonNyStyle);
                     }}
                   >
                     <option value="dot">ڠ (Nga)</option>
@@ -1629,6 +1960,9 @@ export default function App() {
                         })
                       );
                       showToast(`Huruf P (p) diubah ke: ${val === "dot" ? "ڤ (Pa 3 Titik)" : "ف (Fa Polos)"}`);
+                      
+                      // Sync to Google Sheets in real-time
+                      syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, val, pegonNyStyle);
                     }}
                   >
                     <option value="dot">ڤ (Pa)</option>
@@ -1661,6 +1995,9 @@ export default function App() {
                       );
                       const displayLabel = val === "ya" ? "ي (Ya Polos)" : val === "ya_dot" ? "ۑ (Ya 3 Titik Bawah)" : "ڽ (Nya 3 Titik Atas)";
                       showToast(`Huruf Ny (ny) diubah ke: ${displayLabel}`);
+                      
+                      // Sync to Google Sheets in real-time
+                      syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, pegonPStyle, val);
                     }}
                   >
                     <option value="ya">ي (Ya Polos)</option>
@@ -1956,7 +2293,7 @@ export default function App() {
             </div>
 
             {/* Import / Export mapping config buttons */}
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleExportJSON}
                 className="flex items-center space-x-1.5 py-1.5 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all"

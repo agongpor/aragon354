@@ -40,6 +40,8 @@ function doPost(e) {
 
     var spreadsheetId = payload.spreadsheetId;
     var values = payload.values;
+    var sheetName = payload.sheetName;
+    var clearSheet = payload.clearSheet;
 
     if (!values || !Array.isArray(values) || values.length === 0) {
       return createJsonResponse({
@@ -63,21 +65,54 @@ function doPost(e) {
       });
     }
 
-    // Gunakan sheet pertama secara default
-    var sheet = ss.getSheets()[0];
+    // Gunakan sheet berdasarkan nama jika ditargetkan, atau sheet pertama secara default
+    var sheet;
+    if (sheetName) {
+      sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        sheet = ss.insertSheet(sheetName);
+      } else if (clearSheet) {
+        sheet.clearContents();
+      }
+    } else {
+      sheet = ss.getSheets()[0];
+    }
 
     // Jika sheet kosong sama sekali, tambahkan header kolom secara otomatis agar rapi
     if (sheet.getLastRow() === 0) {
-      var headerRow = [
-        "Waktu Transliterasi",
-        "Teks Asal (Latin)",
-        "Hasil Aksara (Arab Pegon/Jawi)",
-        "Tipe Transliterasi (Pegon/Jawi)",
-        "Metode (Manual/AI)",
-        "Panjang Karakter",
-        "Jumlah Kata",
-        "Keterangan/Saran"
-      ];
+      var headerRow = [];
+      if (sheetName && sheetName.indexOf("Referensi") !== -1) {
+        headerRow = [
+          "Waktu Sinkronisasi",
+          "ID Aturan",
+          "Jenis Aturan",
+          "Teks Latin (Input)",
+          "Aksara Arab Pegon (Output)",
+          "Deskripsi / Keterangan",
+          "Status Ejaan"
+        ];
+      } else if (sheetName && sheetName.indexOf("Pengaturan") !== -1) {
+        headerRow = [
+          "Waktu Sinkronisasi",
+          "Kunci Pengaturan",
+          "Nilai Pengaturan",
+          "Keterangan Deskriptif"
+        ];
+      } else {
+        headerRow = [
+          "Waktu Transliterasi",
+          "Teks Asal (Latin)",
+          "Hasil Aksara (Arab Pegon/Jawi)",
+          "Tipe Transliterasi (Pegon/Jawi)",
+          "Metode (Manual/AI)",
+          "Panjang Karakter",
+          "Jumlah Kata",
+          "Keterangan/Saran",
+          "Pengguna",
+          "Lokasi",
+          "IP Address"
+        ];
+      }
       sheet.appendRow(headerRow);
     }
 
@@ -91,7 +126,7 @@ function doPost(e) {
 
     return createJsonResponse({
       success: true,
-      message: "Sukses menyinkronkan data ke Google Sheets (" + values.length + " baris ditambahkan)",
+      message: "Sukses menyinkronkan data ke Google Sheets (" + values.length + " baris ditambahkan ke sheet '" + (sheetName || sheet.getName()) + "')",
       spreadsheetUrl: ss.getUrl()
     });
 
@@ -110,8 +145,97 @@ function createJsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// Fungsi doGet sebagai endpoint ping uji coba dan deteksi email otomatis
+// Fungsi doGet sebagai endpoint ping uji coba dan deteksi email otomatis serta mengunduh referensi kustom
 function doGet(e) {
+  var action = e && e.parameter ? e.parameter.action : null;
+  var spreadsheetId = e && e.parameter ? e.parameter.spreadsheetId : null;
+  var sheetName = "Referensi & Kamus Kustom";
+
+  if (action === "read-rules") {
+    try {
+      var ss;
+      if (spreadsheetId) {
+        ss = SpreadsheetApp.openById(spreadsheetId);
+      } else {
+        ss = SpreadsheetApp.getActiveSpreadsheet();
+      }
+      if (!ss) {
+        return createJsonResponse({ success: false, error: "Spreadsheet tidak ditemukan atau tidak memiliki hak akses." });
+      }
+      var sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        return createJsonResponse({ success: true, mappings: [] });
+      }
+      var lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return createJsonResponse({ success: true, mappings: [] });
+      }
+      var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+      var mappings = [];
+      for (var i = 0; i < data.length; i++) {
+        var row = data[i];
+        var timestamp = row[0];
+        var id = row[1];
+        var typeLabel = row[2];
+        var latin = row[3];
+        var arabic = row[4];
+        var description = row[5];
+        var statusEjaan = row[6];
+
+        if (id && id !== "-" && latin && arabic) {
+          var type = "word";
+          if (typeLabel.indexOf("Karakter Tunggal") !== -1) type = "character";
+          else if (typeLabel.indexOf("Digraf") !== -1 || typeLabel.indexOf("Suku Kata") !== -1) type = "digraph";
+
+          mappings.push({
+            id: id,
+            type: type,
+            latin: latin,
+            arabic: arabic,
+            description: description,
+            isPreset: false
+          });
+        }
+      }
+      return createJsonResponse({ success: true, mappings: mappings });
+    } catch (err) {
+      return createJsonResponse({ success: false, error: err.toString() });
+    }
+  } else if (action === "read-settings") {
+    try {
+      var ss;
+      if (spreadsheetId) {
+        ss = SpreadsheetApp.openById(spreadsheetId);
+      } else {
+        ss = SpreadsheetApp.getActiveSpreadsheet();
+      }
+      if (!ss) {
+        return createJsonResponse({ success: false, error: "Spreadsheet tidak ditemukan atau tidak memiliki hak akses." });
+      }
+      var sheet = ss.getSheetByName("Pengaturan Kustom");
+      if (!sheet) {
+        return createJsonResponse({ success: true, settings: {} });
+      }
+      var lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return createJsonResponse({ success: true, settings: {} });
+      }
+      var data = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
+      var settings = {};
+      for (var i = 0; i < data.length; i++) {
+        var row = data[i];
+        var key = row[1];
+        var val = row[2];
+        if (key && val !== undefined) {
+          settings[key] = val;
+        }
+      }
+      return createJsonResponse({ success: true, settings: settings });
+    } catch (err) {
+      return createJsonResponse({ success: false, error: err.toString() });
+    }
+  }
+
   return createJsonResponse({
     success: true,
     message: "Koneksi Google Apps Script Web App berhasil aktif!",
