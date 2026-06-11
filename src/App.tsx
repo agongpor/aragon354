@@ -71,7 +71,8 @@ export default function App() {
   // Interactive debugger state
   const [selectedWordResult, setSelectedWordResult] = useState<WordConversionResult | null>(null);
   const [searchMappingQuery, setSearchMappingQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"char" | "digraph" | "word">("char");
+  const [activeTab, setActiveTab] = useState<"character" | "digraph" | "word">("character");
+  const [showAllMappings, setShowAllMappings] = useState(false);
 
   // Rule editor form state
   const [newLatin, setNewLatin] = useState("");
@@ -1471,15 +1472,20 @@ export default function App() {
   };
 
   // Filter local rule list in the table
-  const filteredMappings = customMappings.filter(m => {
-    if (m.type !== activeTab) return false;
-    if (!searchMappingQuery) return true;
-    return (
-      m.latin.toLowerCase().includes(searchMappingQuery.toLowerCase()) ||
-      m.arabic.includes(searchMappingQuery) ||
-      (m.description && m.description.toLowerCase().includes(searchMappingQuery.toLowerCase()))
-    );
-  });
+  const filteredMappings = customMappings
+    .filter(m => {
+      if (m.type !== activeTab) return false;
+      if (!showAllMappings && m.isPreset) return false;
+      if (!searchMappingQuery) return true;
+      return (
+        m.latin.toLowerCase().includes(searchMappingQuery.toLowerCase()) ||
+        m.arabic.includes(searchMappingQuery) ||
+        (m.description && m.description.toLowerCase().includes(searchMappingQuery.toLowerCase()))
+      );
+    })
+    .sort((a, b) => {
+      return a.latin.localeCompare(b.latin, 'id', { sensitivity: 'base', numeric: true });
+    });
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-amber-100 selection:text-amber-900 pb-20">
@@ -2464,40 +2470,66 @@ export default function App() {
             <div className="lg:col-span-8 space-y-4">
               
               {/* Tabs list */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-2">
-                <div className="flex space-x-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/50">
-                  <button
-                    onClick={() => setActiveTab("char")}
-                    className={`py-1.5 px-3.5 rounded-lg text-xs font-semibold transition-all ${
-                      activeTab === "char" ? "bg-white text-slate-800 shadow-sm" : "text-slate-550 hover:bg-white/50"
-                    }`}
-                  >
-                    Karakter Tunggal
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("digraph")}
-                    className={`py-1.5 px-3.5 rounded-lg text-xs font-semibold transition-all ${
-                      activeTab === "digraph" ? "bg-white text-slate-800 shadow-sm" : "text-slate-550 hover:bg-white/50"
-                    }`}
-                  >
-                    Digraf / Suku Kata
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("word")}
-                    className={`py-1.5 px-3.5 rounded-lg text-xs font-semibold transition-all ${
-                      activeTab === "word" ? "bg-white text-slate-800 shadow-sm" : "text-slate-550 hover:bg-white/50"
-                    }`}
-                  >
-                    Kamus Kata ({customMappings.filter(m => m.type === "word").length})
-                  </button>
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 border-b border-slate-200 pb-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex space-x-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/50">
+                    <button
+                      onClick={() => setActiveTab("character")}
+                      className={`py-1.5 px-3.5 rounded-lg text-xs font-semibold transition-all ${
+                        activeTab === "character" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:bg-white/50"
+                      }`}
+                    >
+                      Karakter Tunggal ({customMappings.filter(m => m.type === "character" && (showAllMappings || !m.isPreset)).length})
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("digraph")}
+                      className={`py-1.5 px-3.5 rounded-lg text-xs font-semibold transition-all ${
+                        activeTab === "digraph" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:bg-white/50"
+                      }`}
+                    >
+                      Digraf / Suku Kata ({customMappings.filter(m => m.type === "digraph" && (showAllMappings || !m.isPreset)).length})
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("word")}
+                      className={`py-1.5 px-3.5 rounded-lg text-xs font-semibold transition-all ${
+                        activeTab === "word" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:bg-white/50"
+                      }`}
+                    >
+                      Kamus Kata ({customMappings.filter(m => m.type === "word" && (showAllMappings || !m.isPreset)).length})
+                    </button>
+                  </div>
+
+                  {/* Toggle filter (Tampilkan Semua / Kustom Saja) */}
+                  <div className="flex items-center space-x-1 p-1 bg-amber-50/60 rounded-xl border border-amber-200/45 text-[11px] font-bold">
+                    <button
+                      onClick={() => setShowAllMappings(false)}
+                      className={`py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
+                        !showAllMappings 
+                          ? "bg-amber-500 text-white shadow-xs" 
+                          : "text-amber-800/80 hover:bg-amber-100/70"
+                      }`}
+                    >
+                      Kustom Saja
+                    </button>
+                    <button
+                      onClick={() => setShowAllMappings(true)}
+                      className={`py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
+                        showAllMappings 
+                          ? "bg-amber-500 text-white shadow-xs" 
+                          : "text-amber-800/80 hover:bg-amber-100/70"
+                      }`}
+                    >
+                      Tampilkan Semua
+                    </button>
+                  </div>
                 </div>
 
                 {/* Local search in rules */}
-                <div className="relative">
+                <div className="relative w-full lg:w-auto">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-3.5 text-slate-400" />
                   <input
                     type="text"
-                    className="bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-2 text-xs w-full sm:w-56 focus:outline-none focus:ring-1 focus:ring-indigo-600 focus:bg-white"
+                    className="bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-2 text-xs w-full lg:w-56 focus:outline-none focus:ring-1 focus:ring-indigo-600 focus:bg-white"
                     placeholder="Cari referensi aturan..."
                     value={searchMappingQuery}
                     onChange={(e) => setSearchMappingQuery(e.target.value)}
@@ -2506,7 +2538,7 @@ export default function App() {
               </div>
 
               {/* Table rendering mappings */}
-              <div className="overflow-x-auto border border-slate-200 rounded-2xl max-h-80 overflow-y-auto custom-scroll pr-1">
+              <div className="overflow-x-auto border border-slate-200 rounded-2xl max-h-[500px] overflow-y-auto custom-scroll pr-1">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] text-slate-400 uppercase font-mono tracking-wider">
