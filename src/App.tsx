@@ -33,7 +33,8 @@ import {
   transliterateText, 
   transliterateWord,
   transliteratePegonToLatinText,
-  transliteratePegonToLatinWord
+  transliteratePegonToLatinWord,
+  splitLineIntoTokens
 } from "./utils/transliterator";
 
 const EXAMPLES: any[] = [];
@@ -1051,7 +1052,7 @@ export default function App() {
         }
         return `(Memproses rujukan otomatis: ${trimmed.slice(1).trim()}...)`;
       }
-      return line.split(/(\s+)/).map(segment => {
+      return splitLineIntoTokens(line).map(segment => {
         if (!segment.trim()) return segment;
         return transliterateWord(segment, preset, customMappings).arabic;
       }).join("");

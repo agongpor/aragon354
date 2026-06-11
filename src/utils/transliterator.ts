@@ -385,8 +385,123 @@ const ARABIC_LOANWORDS: Record<string, string> = {
   "saf": "صف",
   "wudhu": "وضوء",
   "wudu": "وضوء",
-  "tayamum": "تيمم"
+  "tayamum": "تيمم",
+  
+  // Eid & Holidays / Holy Phrases
+  "idul fitri": "عيد الفطر",
+  "idulfitri": "عيد الفطر",
+  "idul adha": "عيد الأضحى",
+  "iduladha": "عيد الأضحى",
+  "idul qurban": "عيد القربan",
+  "idulqurban": "عيد القربان",
+  "minal aidin wal faizin": "من العائدين والفائزين",
+  "minal 'aidin wal-faizin": "من العائدين والفائزين",
+  "minal 'aidin wal faizin": "من العائدين والفائزين",
+  "minal aidzin wal faizin": "من العائدين والفائزين",
+  "minal aidzin wal fayizin": "من العائدين والفائزين",
+  
+  // Phrases with spaces & other rich terms
+  "insya allah": "إن شاء الله",
+  "masya allah": "ما شاء الله",
+  "masyaallah": "ما شاء الله",
+  "la ilaha illallah": "لا إله إلا الله",
+  "laa ilaha illallah": "لا إله إلا الله",
+  "lailahaillallah": "لا إله إلا الله",
+  "allahu akbar": "الله أكبر",
+  "allohu akbar": "الله أكبر",
+  "bismillahirrahmanirrahim": "بسم الله الرحمن الرحيم",
+  "bismillah-ir-rahman-ir-rahim": "بسم الله الرحمن الرحيم",
+  "assalamualaikum warahmatullahi wabarakatuh": "السلام عليكم ورحمة الله وبركاته",
+  "assalamu'alaikum warahmatullahi wabarakatuh": "السلام عليكم ورحمة الله وبركاته",
+  "waalaikumsalam warahmatullahi wabarakatuh": "وعليكم السلام ورحمة الله وبركاته",
+  "wa'alaikumsalam warahmatullahi wabarakatuh": "وعليكم السلام ورحمة الله وبركاته",
+
+  // Individual components for fallbacks
+  "idul": "عيد",
+  "fitri": "الفطر",
+  "adha": "الأضحى",
+  "qurban": "القربان"
 };
+
+/**
+ * Tokenizes a line of text while keeping multi-word Arabic/Latin holy phrases
+ * intact as single tokens to allow correct, unified, non-phonetic transliterations.
+ */
+export function splitLineIntoTokens(line: string): string[] {
+  // Sort phrases by length descending so longer phrases match first (greedy matching)
+  const phraseSorted = [
+    // Ind-Latin Phrases
+    "assalamualaikum warahmatullahi wabarakatuh",
+    "assalamu'alaikum warahmatullahi wabarakatuh",
+    "waalaikumsalam warahmatullahi wabarakatuh",
+    "wa'alaikumsalam warahmatullahi wabarakatuh",
+    "shallallahu 'alaihi wasallam",
+    "shallallahu alaihi wasallam",
+    "shollallahu 'alaihi wasallam",
+    "shollallahu alaihi wasallam",
+    "bismillahirrahmanirrahim",
+    "bismillah-ir-rahman-ir-rahim",
+    "minal 'aidin wal-faizin",
+    "minal 'aidin wal faizin",
+    "minal aidin wal faizin",
+    "minal aidzin wal faizin",
+    "minal aidzin wal fayizin",
+    "assalamualaikum",
+    "assalamu'alaikum",
+    "waalaikumsalam",
+    "wa'alaikumsalam",
+    "insya allah",
+    "masya allah",
+    "la ilaha illallah",
+    "laa ilaha illallah",
+    "idul fitri",
+    "idul adha",
+    "idul qurban",
+
+    // Arabic Script Phrases
+    "السلام عليكم ورحمة الله وبركاته",
+    "وعليكم السلام ورحمة الله وبركاته",
+    "صلى الله عليه وسلم",
+    "بسم الله الرحمن الرحيم",
+    "من العائدين والفائزين",
+    "السلام عليكم",
+    "وعليكم السلام",
+    "إن شاء الله",
+    "ما شاء الله",
+    "لا إله إلا الله",
+    "الله أكبر",
+    "عيد الفطر",
+    "عيد الأضحى",
+    "عيد القربان",
+    "بسم الله"
+  ].sort((a, b) => b.length - a.length);
+
+  let currentText = line;
+  const placeholders: { id: string; original: string }[] = [];
+  
+  phraseSorted.forEach((phrase, index) => {
+    // Escaping regex characters, replacing spaces in phrases with optional double/multiple spaces
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    
+    // Boundary check with lookbehind/lookahead to match phrases bounded by space or standard punctuation
+    const pattern = new RegExp(`(?<=^|\\s|[,.!?;:()""'\\[\\]{}<>“”—])(${escaped})(?=$|\\s|[,.!?;:()""'\\[\\]{}<>“”—])`, 'gi');
+    
+    currentText = currentText.replace(pattern, (match) => {
+      const placeholderId = `__ARABIC_PHRASE_${index}_${placeholders.length}__`;
+      placeholders.push({ id: placeholderId, original: match });
+      return placeholderId;
+    });
+  });
+
+  // Split line by spaces preserving them as tokens
+  const segments = currentText.split(/(\s+)/);
+
+  // Restore placeholders to original text
+  return segments.map(segment => {
+    const found = placeholders.find(p => p.id === segment);
+    return found ? found.original : segment;
+  });
+}
 
 export function transliterateWord(
   rawWord: string,
@@ -651,7 +766,7 @@ export function transliterateText(
     if (!line.trim()) return "";
 
     // Split words but keep spacing intact
-    const wordsWithSpaces = line.split(/(\s+)/);
+    const wordsWithSpaces = splitLineIntoTokens(line);
     const convertedSegments = wordsWithSpaces.map((segment) => {
       if (!segment.trim()) {
         return segment; // Keep trailing spaces
@@ -927,7 +1042,7 @@ export function transliteratePegonToLatinText(
   const translatedLines = lines.map((line) => {
     if (!line.trim()) return "";
 
-    const wordsWithSpaces = line.split(/(\s+)/);
+    const wordsWithSpaces = splitLineIntoTokens(line);
     const convertedSegments = wordsWithSpaces.map((segment) => {
       if (!segment.trim()) {
         return segment;
