@@ -90,6 +90,21 @@ export default function App() {
   const [editArabic, setEditArabic] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
+  // Unlocked settings for g, ng, p, ny, c
+  const [unlockedSettings, setUnlockedSettings] = useState<Record<string, boolean>>({
+    g: false,
+    ng: false,
+    p: false,
+    ny: false,
+    c: false,
+  });
+
+  // Popup rule editing state
+  const [activePopupRule, setActivePopupRule] = useState<CustomMapping | null>(null);
+  const [popupLatin, setPopupLatin] = useState("");
+  const [popupArabic, setPopupArabic] = useState("");
+  const [popupDescription, setPopupDescription] = useState("");
+
   // AI Translation mode state
   const [useAI, setUseAI] = useState(false);
   const [aiResult, setAiResult] = useState("");
@@ -1386,6 +1401,62 @@ export default function App() {
     handleEditRuleCancel();
   };
 
+  // Toggle lock state of letters (g, ng, p, ny, c) via triple-click
+  const handleSettingClick = (e: React.MouseEvent, type: "g" | "ng" | "p" | "ny" | "c") => {
+    if (e.detail === 3) {
+      const isCurrentlyUnlocked = unlockedSettings[type];
+      setUnlockedSettings(prev => ({
+        ...prev,
+        [type]: !isCurrentlyUnlocked
+      }));
+      showToast(`Pengaturan Huruf ${type.toUpperCase()} ${!isCurrentlyUnlocked ? "TERBUKA! Silakan pilih ejaan." : "TERKUNCI KEMBALI."}`);
+    }
+  };
+
+  // Open edit popup modal on row triple-click
+  const handleRowClick = (e: React.MouseEvent, rule: CustomMapping) => {
+    if (rule.isPreset) return;
+    if (e.detail === 3) {
+      setActivePopupRule(rule);
+      setPopupLatin(rule.latin);
+      setPopupArabic(rule.arabic);
+      setPopupDescription(rule.description || "");
+      showToast(`Membuka popup edit untuk: "${rule.latin}"`);
+    }
+  };
+
+  // Save changes from edit popup modal
+  const handleSavePopupRule = () => {
+    if (!activePopupRule) return;
+    const cleanLatin = popupLatin.trim().toLowerCase();
+    const cleanArabic = popupArabic.trim();
+    if (!cleanLatin || !cleanArabic) {
+      alert("Kolom Latin dan Arab tidak boleh kosong.");
+      return;
+    }
+
+    const updated = customMappings.map(m => {
+      if (m.id === activePopupRule.id) {
+        return {
+          ...m,
+          latin: cleanLatin,
+          arabic: cleanArabic,
+          description: popupDescription.trim()
+        };
+      }
+      return m;
+    });
+
+    setCustomMappings(updated);
+    sessionStorage.setItem(`aksara_rules_${preset}`, JSON.stringify(updated));
+    showToast(`Referensi "${cleanLatin}" berhasil diperbaharui!`);
+
+    // Automatically keep Google Sheet reference / dictionary tab synchronized
+    syncRulesToSheetsDirect(updated);
+
+    setActivePopupRule(null);
+  };
+
   // Save current translation to history list
   const handleSaveToHistory = () => {
     const activeOutput = finalArabicOutput;
@@ -2034,10 +2105,23 @@ export default function App() {
                   </select>
                 </div>
 
-                <div className="flex items-center px-1">
-                  <span className="text-[10px] uppercase font-mono text-slate-400 mr-1">Huruf g:</span>
+                <div 
+                  onClick={(e) => handleSettingClick(e, "g")}
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none ${
+                    !unlockedSettings.g 
+                      ? "opacity-80 bg-slate-105 border border-slate-200/60" 
+                      : "bg-emerald-50 border border-emerald-300 shadow-2xs"
+                  }`}
+                  title={!unlockedSettings.g ? "Klik 3 kali untuk mengubah pilihan huruf G" : "Terbuka - Silakan pilih ejaan G"}
+                >
+                  <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
+                    {!unlockedSettings.g ? "🔒 G:" : "🔓 G:"}
+                  </span>
                   <select
-                    className="bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-505 cursor-pointer"
+                    disabled={!unlockedSettings.g}
+                    className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
+                      !unlockedSettings.g ? "pointer-events-none opacity-80" : "cursor-pointer"
+                    }`}
                     value={pegonGaStyle}
                     onChange={(e) => {
                       const val = e.target.value as "dot" | "plain";
@@ -2067,11 +2151,24 @@ export default function App() {
                     <option value="plain">ك (Polos)</option>
                   </select>
                 </div>
-
-                <div className="flex items-center px-1 border-s border-slate-200 ps-1.5">
-                  <span className="text-[10px] uppercase font-mono text-slate-400 mr-1">Huruf ng:</span>
+ 
+                <div 
+                  onClick={(e) => handleSettingClick(e, "ng")}
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 ${
+                    !unlockedSettings.ng 
+                      ? "opacity-80 bg-slate-105 border border-slate-200/60" 
+                      : "bg-emerald-50 border border-emerald-300 shadow-2xs"
+                  }`}
+                  title={!unlockedSettings.ng ? "Klik 3 kali untuk mengubah pilihan huruf NG" : "Terbuka - Silakan pilih ejaan NG"}
+                >
+                  <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
+                    {!unlockedSettings.ng ? "🔒 NG:" : "🔓 NG:"}
+                  </span>
                   <select
-                    className="bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-505 cursor-pointer"
+                    disabled={!unlockedSettings.ng}
+                    className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
+                      !unlockedSettings.ng ? "pointer-events-none opacity-80" : "cursor-pointer"
+                    }`}
                     value={pegonNgStyle}
                     onChange={(e) => {
                       const val = e.target.value as "dot" | "plain";
@@ -2101,11 +2198,24 @@ export default function App() {
                     <option value="plain">ع (Ain)</option>
                   </select>
                 </div>
-
-                <div className="flex items-center px-1 border-s border-slate-200 ps-1.5">
-                  <span className="text-[10px] uppercase font-mono text-slate-400 mr-1">Huruf p:</span>
+ 
+                <div 
+                  onClick={(e) => handleSettingClick(e, "p")}
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 ${
+                    !unlockedSettings.p 
+                      ? "opacity-80 bg-slate-105 border border-slate-200/60" 
+                      : "bg-emerald-50 border border-emerald-300 shadow-2xs"
+                  }`}
+                  title={!unlockedSettings.p ? "Klik 3 kali untuk mengubah pilihan huruf P" : "Terbuka - Silakan pilih ejaan P"}
+                >
+                  <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
+                    {!unlockedSettings.p ? "🔒 P:" : "🔓 P:"}
+                  </span>
                   <select
-                    className="bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-505 cursor-pointer"
+                    disabled={!unlockedSettings.p}
+                    className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
+                      !unlockedSettings.p ? "pointer-events-none opacity-80" : "cursor-pointer"
+                    }`}
                     value={pegonPStyle}
                     onChange={(e) => {
                       const val = e.target.value as "dot" | "plain";
@@ -2135,11 +2245,24 @@ export default function App() {
                     <option value="plain">ف (Fa)</option>
                   </select>
                 </div>
-
-                <div className="flex items-center px-1 border-s border-slate-200 ps-1.5">
-                  <span className="text-[10px] uppercase font-mono text-slate-400 mr-1">Huruf ny:</span>
+ 
+                <div 
+                  onClick={(e) => handleSettingClick(e, "ny")}
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 ${
+                    !unlockedSettings.ny 
+                      ? "opacity-80 bg-slate-105 border border-slate-200/60" 
+                      : "bg-emerald-50 border border-emerald-300 shadow-2xs"
+                  }`}
+                  title={!unlockedSettings.ny ? "Klik 3 kali untuk mengubah pilihan huruf NY" : "Terbuka - Silakan pilih ejaan NY"}
+                >
+                  <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
+                    {!unlockedSettings.ny ? "🔒 NY:" : "🔓 NY:"}
+                  </span>
                   <select
-                    className="bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-505 cursor-pointer"
+                    disabled={!unlockedSettings.ny}
+                    className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
+                      !unlockedSettings.ny ? "pointer-events-none opacity-80" : "cursor-pointer"
+                    }`}
                     value={pegonNyStyle}
                     onChange={(e) => {
                       const val = e.target.value as "ya" | "ya_dot" | "nya";
@@ -2171,11 +2294,24 @@ export default function App() {
                     <option value="nya">ڽ (Nya)</option>
                   </select>
                 </div>
-
-                <div className="flex items-center px-1 border-s border-slate-200 ps-1.5">
-                  <span className="text-[10px] uppercase font-mono text-slate-400 mr-1">Huruf c:</span>
+ 
+                <div 
+                  onClick={(e) => handleSettingClick(e, "c")}
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 ${
+                    !unlockedSettings.c 
+                      ? "opacity-80 bg-slate-105 border border-slate-200/60" 
+                      : "bg-emerald-50 border border-emerald-300 shadow-2xs"
+                  }`}
+                  title={!unlockedSettings.c ? "Klik 3 kali untuk mengubah pilihan huruf C" : "Terbuka - Silakan pilih ejaan C"}
+                >
+                  <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
+                    {!unlockedSettings.c ? "🔒 C:" : "🔓 C:"}
+                  </span>
                   <select
-                    className="bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-505 cursor-pointer"
+                    disabled={!unlockedSettings.c}
+                    className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
+                      !unlockedSettings.c ? "pointer-events-none opacity-80" : "cursor-pointer"
+                    }`}
                     value={pegonCStyle}
                     onChange={(e) => {
                       const val = e.target.value as "dot" | "plain";
@@ -2487,7 +2623,7 @@ export default function App() {
                   Manajer Referensi & Kamus Kustom (Aksara Arab Pegon)
                 </h2>
                 <p className="text-slate-500 text-xs mt-0.5">
-                  Visualisasikan, ubah ejaan tunggal, definisikan digraf, atau daftarkan Kamus Kata Anda sebagai pedoman transliterasi.
+                  Visualisasikan, ubah ejaan tunggal, definisikan digraf, atau daftarkan Kamus Kata Anda sebagai pedoman transliterasi. <span className="font-semibold text-indigo-750">Tips: Klik 3 kali pada baris tabel kustom untuk mengedit, serta klik 3 kali pada ikon kunci (🔒) di bar pengaturan huruf untuk membuka kunci ejaan g, ng, p, ny, dan c.</span>
                 </p>
               </div>
             </div>
@@ -2680,101 +2816,49 @@ export default function App() {
                   <tbody className="divide-y divide-slate-150 text-xs">
                     {filteredMappings.length > 0 ? (
                       filteredMappings.map((rule) => {
-                        const isEditing = rule.id === editingRuleId;
                         return (
-                          <tr key={rule.id} className={`${isEditing ? "bg-amber-50/50" : "hover:bg-slate-50/50"} transition-colors`}>
-                            {isEditing ? (
-                              <>
-                                <td className="py-2 px-4 font-mono font-bold text-slate-700">
-                                  <input
-                                    type="text"
-                                    value={editLatin}
-                                    onChange={(e) => setEditLatin(e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                                    title="Teks Latin Asal"
-                                  />
-                                </td>
-                                <td className="py-2 px-4 text-indigo-900 font-arabic font-bold text-lg leading-none">
-                                  <input
-                                    type="text"
-                                    value={editArabic}
-                                    onChange={(e) => setEditArabic(e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-right font-arabic font-bold text-sm focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                                    dir="rtl"
-                                    title="Hasil Aksara"
-                                  />
-                                </td>
-                                <td className="py-2 px-4 text-slate-500 text-[11px]">
-                                  <input
-                                    type="text"
-                                    value={editDescription}
-                                    onChange={(e) => setEditDescription(e.target.value)}
-                                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                                    placeholder="Deskripsi singkat..."
-                                    title="Keterangan singkat"
-                                  />
-                                </td>
-                                <td className="py-2 px-4 text-right">
-                                  <div className="flex justify-end items-center space-x-1.5">
-                                    <button
-                                      onClick={() => handleSaveRuleEdit(rule.id)}
-                                      className="p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg transition-colors"
-                                      title="Simpan Perubahan"
-                                    >
-                                      <Check className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={handleEditRuleCancel}
-                                      className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition-colors"
-                                      title="Batal"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="py-2.5 px-4 font-mono font-bold text-slate-700">
-                                  {rule.latin}
-                                </td>
-                                <td className="py-2.5 px-4 text-indigo-950 font-arabic font-bold text-lg leading-none">
-                                  {rule.arabic}
-                                </td>
-                                <td className="py-2.5 px-4 text-slate-500 text-[11px]">
-                                  <div className="flex items-center space-x-1.5">
-                                    <span className={`px-1.5 py-0.5 rounded-[4px] text-[9px] font-bold ${
-                                      rule.isPreset ? "bg-slate-100 text-slate-400" : "bg-indigo-100 text-indigo-700"
-                                    }`}>
-                                      {rule.isPreset ? "Bawaan" : "Kustom"}
-                                    </span>
-                                    <span>{rule.description || "-"}</span>
-                                  </div>
-                                </td>
-                                <td className="py-2.5 px-4 text-right">
-                                  {rule.isPreset ? (
-                                    <span className="text-slate-300 italic text-[10px]">Terkunci</span>
-                                  ) : (
-                                    <div className="flex justify-end items-center space-x-1">
-                                      <button
-                                        onClick={() => handleEditRuleStart(rule)}
-                                        className="p-1 text-slate-400 hover:text-indigo-650 transition-colors"
-                                        title="Ubah Referensi"
-                                      >
-                                        <Edit2 className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteRule(rule.id, `${rule.latin} &rarr; ${rule.arabic}`)}
-                                        className="p-1 text-slate-400 hover:text-red-650 transition-colors"
-                                        title="Hapus Aturan"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </td>
-                              </>
-                            )}
+                          <tr 
+                            key={rule.id} 
+                            onClick={(e) => handleRowClick(e, rule)}
+                            className={`${
+                              !rule.isPreset 
+                                ? "cursor-pointer hover:bg-indigo-50/40 active:bg-indigo-100/30" 
+                                : "hover:bg-slate-50/50"
+                            } transition-colors select-none`}
+                            title={rule.isPreset ? "Referensi bawaan sistem (terkunci)." : undefined}
+                          >
+                            <td className="py-2.5 px-4 font-mono font-bold text-slate-700">
+                              {rule.latin}
+                            </td>
+                            <td className="py-2.5 px-4 text-indigo-950 font-arabic font-bold text-lg leading-none">
+                              {rule.arabic}
+                            </td>
+                            <td className="py-2.5 px-4 text-slate-500 text-[11px]">
+                              <div className="flex items-center space-x-1.5">
+                                <span className={`px-1.5 py-0.5 rounded-[4px] text-[9px] font-bold ${
+                                  rule.isPreset ? "bg-slate-100 text-slate-400" : "bg-indigo-100 text-indigo-700"
+                                }`}>
+                                  {rule.isPreset ? "Bawaan" : "Kustom"}
+                                </span>
+                                <span>{rule.description || "-"}</span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                              {rule.isPreset ? (
+                                <span className="text-slate-300 italic text-[10px]">Terkunci</span>
+                              ) : (
+                                <div className="flex justify-end items-center space-x-1">
+                                  {/* Edit button is hidden here per request. Only Delete button exists */}
+                                  <button
+                                    onClick={() => handleDeleteRule(rule.id, `${rule.latin} &rarr; ${rule.arabic}`)}
+                                    className="p-1.5 text-slate-400 hover:text-red-650 transition-colors cursor-pointer"
+                                    title="Hapus Aturan"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
                           </tr>
                         );
                       })
@@ -3433,6 +3517,99 @@ export default function App() {
                 className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold px-4 py-2 rounded-xl cursor-pointer transition-all text-xs"
               >
                 Batal
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* POPUP MODAL UNTUK EDIT KATA KUSTOM (TRIPLE CLICK) */}
+      {activePopupRule && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 overflow-y-auto no-print">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl border border-indigo-100 flex flex-col transform transition-all duration-300">
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 text-slate-100 p-5 px-6 flex justify-between items-center border-b border-indigo-950">
+              <div className="flex items-center space-x-2.5">
+                <Edit2 className="w-5 h-5 text-amber-400" />
+                <h3 className="font-display font-semibold text-xs md:text-sm text-slate-100 uppercase tracking-wider">
+                  Edit Kata Kustom
+                </h3>
+              </div>
+              <button
+                onClick={() => setActivePopupRule(null)}
+                className="text-slate-300 hover:text-white transition-colors cursor-pointer p-1 rounded-lg hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Input fields */}
+            <div className="p-6 space-y-4">
+              <p className="text-slate-500 text-[11px] leading-relaxed">
+                Anda mengedit aturan kustom untuk kata <strong className="text-indigo-900 font-mono">"{activePopupRule.latin}"</strong>. Perubahan ini akan segera memengaruhi hasil transliterasi Anda secara realtime.
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Ejaan Asal (Latin)
+                  </label>
+                  <input
+                    type="text"
+                    value={popupLatin}
+                    onChange={(e) => setPopupLatin(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 bg-slate-50/50 rounded-xl text-xs font-mono focus:outline-none"
+                    placeholder="Contoh: mangga"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Hasil Aksara (Arab Pegon) - Kanan ke Kiri
+                  </label>
+                  <input
+                    type="text"
+                    value={popupArabic}
+                    onChange={(e) => setPopupArabic(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 bg-slate-50/50 rounded-xl text-right font-arabic font-bold text-base focus:outline-none"
+                    dir="rtl"
+                    placeholder="Contoh: مڠڬا"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Catatan Deskripsi (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={popupDescription}
+                    onChange={(e) => setPopupDescription(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-505 bg-slate-50/50 rounded-xl text-xs focus:outline-none"
+                    placeholder="Contoh: Ejaan kustom untuk nama buah"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer buttons */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setActivePopupRule(null)}
+                className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold px-4 py-2.5 rounded-xl cursor-pointer transition-all text-xs"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePopupRule}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl cursor-pointer transition-all text-xs shadow-sm flex items-center space-x-1.5"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Simpan Perubahan</span>
               </button>
             </div>
 
