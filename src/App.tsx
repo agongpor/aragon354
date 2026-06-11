@@ -51,8 +51,11 @@ export default function App() {
   const [pegonPStyle, setPegonPStyle] = useState<"dot" | "plain">(() => {
     return (localStorage.getItem("pegon_p_style") as "dot" | "plain") || "plain";
   });
-  const [pegonNyStyle, setPegonNyStyle] = useState<"ya" | "ya_dot" | "nya">(() => {
+  const [pegonNyStyle, setPegonNyStyle] = useState<"ya" | "ya_dot" | "nya">( () => {
     return (localStorage.getItem("pegon_ny_style") as "ya" | "ya_dot" | "nya") || "ya";
+  });
+  const [pegonCStyle, setPegonCStyle] = useState<"dot" | "plain">(() => {
+    return (localStorage.getItem("pegon_c_style") as "dot" | "plain") || "dot";
   });
   const [customMappings, setCustomMappings] = useState<CustomMapping[]>([]);
   const [latinInput, setLatinInput] = useState("");
@@ -247,7 +250,8 @@ export default function App() {
     ga: "dot" | "plain",
     ng: "dot" | "plain",
     p: "dot" | "plain",
-    ny: "ya" | "ya_dot" | "nya"
+    ny: "ya" | "ya_dot" | "nya",
+    c: "dot" | "plain"
   ) => {
     const sheetName = "Pengaturan Kustom";
     const timeString = new Date().toLocaleString("id-ID");
@@ -256,7 +260,8 @@ export default function App() {
       [timeString, "pegon_ga_style", ga, ga === "dot" ? "Kaf 1 Titik Bawah (ࢴ)" : "Kaf Polos (ك)"],
       [timeString, "pegon_ng_style", ng, ng === "dot" ? "ڠ (Nga 3 Titik)" : "ع (Ain Polos)"],
       [timeString, "pegon_p_style", p, p === "dot" ? "Pa 3 Titik (ڤ)" : "Fa Polos (ف)"],
-      [timeString, "pegon_ny_style", ny, ny === "ya" ? "Ya Polos (ي)" : ny === "ya_dot" ? "Nya 1 Titik (ۑ)" : "Nya 3 Titik (ڽ)"]
+      [timeString, "pegon_ny_style", ny, ny === "ya" ? "Ya Polos (ي)" : ny === "ya_dot" ? "Nya 1 Titik (ۑ)" : "Nya 3 Titik (ڽ)"],
+      [timeString, "pegon_c_style", c, c === "dot" ? "Ca (چ)" : "Jim Polos (ج)"]
     ];
 
     try {
@@ -379,6 +384,7 @@ export default function App() {
         let loadedNg = pegonNgStyle;
         let loadedP = pegonPStyle;
         let loadedNy = pegonNyStyle;
+        let loadedC = pegonCStyle;
 
         if (fetchedSettings.pegon_ga_style) {
           const gVal = fetchedSettings.pegon_ga_style as "dot" | "plain";
@@ -403,6 +409,12 @@ export default function App() {
           setPegonNyStyle(nyVal);
           localStorage.setItem("pegon_ny_style", nyVal);
           loadedNy = nyVal;
+        }
+        if (fetchedSettings.pegon_c_style) {
+          const cVal = fetchedSettings.pegon_c_style as "dot" | "plain";
+          setPegonCStyle(cVal);
+          localStorage.setItem("pegon_c_style", cVal);
+          loadedC = cVal;
         }
 
         // Apply styles to custom mappings dynamically
@@ -434,6 +446,13 @@ export default function App() {
                 ...m,
                 arabic: loadedNy === "ya" ? "ي" : loadedNy === "ya_dot" ? "ۑ" : "ڽ",
                 description: loadedNy === "ya" ? "Huruf Ya polos untuk Ny" : loadedNy === "ya_dot" ? "Nyeh (Nyeh bertitik 1 di bawah)" : "Nyah (Nyah bertitik 3 di bawah)"
+              };
+            }
+            if (m.latin === "c") {
+              return {
+                ...m,
+                arabic: loadedC === "dot" ? "چ" : "ج",
+                description: loadedC === "dot" ? "Ca (Jim bertitik 3)" : "Jim polos untuk C"
               };
             }
             return m;
@@ -475,6 +494,7 @@ export default function App() {
         localStorage.removeItem("pegon_ng_style");
         localStorage.removeItem("pegon_p_style");
         localStorage.removeItem("pegon_ny_style");
+        localStorage.removeItem("pegon_c_style");
       } catch (err) {}
     };
 
@@ -694,6 +714,9 @@ export default function App() {
     const expectedNyArabic = nyStyle === "ya" ? "ي" : nyStyle === "ya_dot" ? "ۑ" : "ڽ";
     const expectedNyDesc = nyStyle === "ya" ? "Huruf Ya polos untuk Ny" : nyStyle === "ya_dot" ? "Huruf Ya dengan tiga titik di bawah untuk Ny" : "Huruf Nya (3 titik di atas) untuk Ny";
     
+    const cStyle = (localStorage.getItem("pegon_c_style") as "dot" | "plain") || "dot";
+    const expectedCArabic = cStyle === "dot" ? "چ" : "ج";
+
     if (saved) {
       try {
         let parsed = JSON.parse(saved);
@@ -736,6 +759,16 @@ export default function App() {
                 ...m,
                 arabic: expectedNyArabic,
                 description: expectedNyDesc
+              };
+            }
+          }
+          if (m.latin === "c" && preset === "pegon") {
+            if (m.arabic !== expectedCArabic) {
+              migrated = true;
+              return {
+                ...m,
+                arabic: expectedCArabic,
+                description: cStyle === "dot" ? "Ca (Jim bertitik 3)" : "Jim polos untuk C"
               };
             }
           }
@@ -795,6 +828,9 @@ export default function App() {
     const expectedNyArabic = nyStyle === "ya" ? "ي" : nyStyle === "ya_dot" ? "ۑ" : "ڽ";
     const expectedNyDesc = nyStyle === "ya" ? "Huruf Ya polos untuk Ny" : nyStyle === "ya_dot" ? "Huruf Ya dengan tiga titik di bawah untuk Ny" : "Huruf Nya (3 titik di atas) untuk Ny";
 
+    const cStyle = (localStorage.getItem("pegon_c_style") as "dot" | "plain") || "dot";
+    const expectedCArabic = cStyle === "dot" ? "چ" : "ج";
+
     defaultList = defaultList.map(m => {
       if (m.latin === "g") {
         return {
@@ -824,6 +860,13 @@ export default function App() {
           description: expectedNyDesc
         };
       }
+      if (m.latin === "c") {
+        return {
+          ...m,
+          arabic: expectedCArabic,
+          description: cStyle === "dot" ? "Ca (Jim bertitik 3)" : "Jim polos untuk C"
+        };
+      }
       return m;
     });
 
@@ -835,6 +878,16 @@ export default function App() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 3500);
+  };
+
+  const handleGoToKamus = () => {
+    setActiveTab("word");
+    setTimeout(() => {
+      const el = document.getElementById("manajer-referensi");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 50);
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -1090,10 +1143,25 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
-      
+      let data: any = null;
+      const contentType = response.headers.get("Content-Type") || response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        try {
+          data = await response.json();
+        } catch (_) {
+          throw new Error("Gagal mengurai respons data/JSON dari server.");
+        }
+      } else {
+        let textMsg = "";
+        try {
+          textMsg = await response.text();
+        } catch (_) {}
+        const previewText = textMsg ? textMsg.slice(0, 150) : "";
+        throw new Error(`Kesalahan server (${response.status})${previewText ? `: ${previewText}` : ""}`);
+      }
+
       if (!response.ok) {
-        throw new Error(data.error || "Gagal melakukan asisten alih aksara AI.");
+        throw new Error(data && data.error ? data.error : "Gagal melakukan asisten alih aksara AI.");
       }
 
       setAiResult(data.translation);
@@ -1154,12 +1222,33 @@ export default function App() {
             body: JSON.stringify({ query: queryText })
           });
 
-          if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || "Gagal mengambil data dari server.");
+          let data: any = null;
+          const contentType = response.headers.get("Content-Type") || response.headers.get("content-type") || "";
+          
+          if (contentType.includes("application/json")) {
+            try {
+              data = await response.json();
+            } catch (_) {
+              throw new Error("Gagal mengurai respons data/JSON dari server.");
+            }
+          } else {
+            let textMsg = "";
+            try {
+              textMsg = await response.text();
+            } catch (_) {}
+            
+            if (!response.ok) {
+              const previewText = textMsg ? textMsg.slice(0, 150) : "";
+              throw new Error(`Kesalahan server (${response.status})${previewText ? `: ${previewText}` : ""}`);
+            } else {
+              throw new Error("Respons dari server bukan berformat JSON.");
+            }
           }
 
-          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data && data.error ? data.error : "Gagal mengambil data dari server.");
+          }
+
           setQuranHaditsResults(prev => ({
             ...prev,
             [rawLine]: {
@@ -1641,13 +1730,18 @@ export default function App() {
           {/* Main Input Segment Card */}
           <div className="bg-white rounded-2xl border border-slate-200/95 shadow-sm p-6 space-y-4.5">
             
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+            <div className="flex flex-col pb-2 border-b border-slate-100">
               <div className="flex items-center space-x-2.5">
                 <FileText className="w-5 h-5 text-indigo-600" />
                 <h2 className="font-display font-semibold text-lg text-slate-900">
                   {direction === "pegon-to-latin" ? "Aksara Arab Pegon" : "Teks Latin Indonesia"}
                 </h2>
               </div>
+              {direction !== "pegon-to-latin" && (
+                <p className="text-xs text-slate-500 font-sans leading-relaxed mt-1">
+                  Lihat <button type="button" onClick={handleGoToKamus} className="text-indigo-600 hover:text-indigo-800 font-bold underline transition-all cursor-pointer">Kamus Kata</button> untuk penulisan lebih cepat.
+                </p>
+              )}
             </div>
 
             {/* Toolbar pilihan bahasa & mic di atas kotak */}
@@ -1966,7 +2060,7 @@ export default function App() {
                       showToast(`Huruf Ga (g) diubah ke: ${val === "dot" ? "Kaf 1 Titik Bawah (ࢴ)" : "Kaf Polos (ك)"}`);
                       
                       // Sync to Google Sheets in real-time
-                      syncSettingsToSheetsDirect(val, pegonNgStyle, pegonPStyle, pegonNyStyle);
+                      syncSettingsToSheetsDirect(val, pegonNgStyle, pegonPStyle, pegonNyStyle, pegonCStyle);
                     }}
                   >
                     <option value="dot">ࢴ (Titik)</option>
@@ -2000,7 +2094,7 @@ export default function App() {
                       showToast(`Huruf Nga (ng) diubah ke: ${val === "dot" ? "ڠ (Nga 3 Titik)" : "ع (Ain Polos)"}`);
                       
                       // Sync to Google Sheets in real-time
-                      syncSettingsToSheetsDirect(pegonGaStyle, val, pegonPStyle, pegonNyStyle);
+                      syncSettingsToSheetsDirect(pegonGaStyle, val, pegonPStyle, pegonNyStyle, pegonCStyle);
                     }}
                   >
                     <option value="dot">ڠ (Nga)</option>
@@ -2034,7 +2128,7 @@ export default function App() {
                       showToast(`Huruf P (p) diubah ke: ${val === "dot" ? "ڤ (Pa 3 Titik)" : "ف (Fa Polos)"}`);
                       
                       // Sync to Google Sheets in real-time
-                      syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, val, pegonNyStyle);
+                      syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, val, pegonNyStyle, pegonCStyle);
                     }}
                   >
                     <option value="dot">ڤ (Pa)</option>
@@ -2069,12 +2163,46 @@ export default function App() {
                       showToast(`Huruf Ny (ny) diubah ke: ${displayLabel}`);
                       
                       // Sync to Google Sheets in real-time
-                      syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, pegonPStyle, val);
+                      syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, pegonPStyle, val, pegonCStyle);
                     }}
                   >
                     <option value="ya">ي (Ya Polos)</option>
                     <option value="ya_dot">ۑ (Ya 3 Titik)</option>
                     <option value="nya">ڽ (Nya)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center px-1 border-s border-slate-200 ps-1.5">
+                  <span className="text-[10px] uppercase font-mono text-slate-400 mr-1">Huruf c:</span>
+                  <select
+                    className="bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-505 cursor-pointer"
+                    value={pegonCStyle}
+                    onChange={(e) => {
+                      const val = e.target.value as "dot" | "plain";
+                      setPegonCStyle(val);
+                      localStorage.setItem("pegon_c_style", val);
+                      
+                      // Update current customMappings
+                      setCustomMappings((prev) => 
+                        prev.map((m) => {
+                          if (m.latin === "c") {
+                            return {
+                              ...m,
+                              arabic: val === "dot" ? "چ" : "ج",
+                              description: val === "dot" ? "Ca (Jim bertitik 3)" : "Jim polos untuk C"
+                            };
+                          }
+                          return m;
+                        })
+                      );
+                      showToast(`Huruf C (c) diubah ke: ${val === "dot" ? "چ (Ca 3 Titik)" : "ج (Jim Polos)"}`);
+                      
+                      // Sync to Google Sheets in real-time
+                      syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, pegonPStyle, pegonNyStyle, val);
+                    }}
+                  >
+                    <option value="dot">چ (Ca)</option>
+                    <option value="plain">ج (Jim)</option>
                   </select>
                 </div>
               </div>
@@ -2344,7 +2472,7 @@ export default function App() {
       </main>
 
       {/* MIDDLE SECTION: Custom Mapping Lexicon Reference Manager */}
-      <section className="max-w-7xl mx-auto px-4 md:px-8 mt-8 no-print">
+      <section id="manajer-referensi" className="max-w-7xl mx-auto px-4 md:px-8 mt-8 no-print">
         
         <div className="bg-white rounded-3xl border border-slate-200/95 shadow-sm p-6 space-y-6">
           
