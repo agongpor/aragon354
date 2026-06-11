@@ -2107,12 +2107,11 @@ export default function App() {
 
                 <div 
                   onClick={(e) => handleSettingClick(e, "g")}
-                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none ${
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none cursor-default ${
                     !unlockedSettings.g 
                       ? "opacity-80 bg-slate-105 border border-slate-200/60" 
                       : "bg-emerald-50 border border-emerald-300 shadow-2xs"
                   }`}
-                  title={!unlockedSettings.g ? "Klik 3 kali untuk mengubah pilihan huruf G" : "Terbuka - Silakan pilih ejaan G"}
                 >
                   <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
                     {!unlockedSettings.g ? "🔒 G:" : "🔓 G:"}
@@ -2120,7 +2119,7 @@ export default function App() {
                   <select
                     disabled={!unlockedSettings.g}
                     className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
-                      !unlockedSettings.g ? "pointer-events-none opacity-80" : "cursor-pointer"
+                      !unlockedSettings.g ? "pointer-events-none opacity-80 cursor-default" : "cursor-pointer"
                     }`}
                     value={pegonGaStyle}
                     onChange={(e) => {
@@ -2143,6 +2142,9 @@ export default function App() {
                       );
                       showToast(`Huruf Ga (g) diubah ke: ${val === "dot" ? "Kaf 1 Titik Bawah (ࢴ)" : "Kaf Polos (ك)"}`);
                       
+                      // Lock style selection again after change
+                      setUnlockedSettings(prev => ({ ...prev, g: false }));
+
                       // Sync to Google Sheets in real-time
                       syncSettingsToSheetsDirect(val, pegonNgStyle, pegonPStyle, pegonNyStyle, pegonCStyle);
                     }}
@@ -2154,12 +2156,11 @@ export default function App() {
  
                 <div 
                   onClick={(e) => handleSettingClick(e, "ng")}
-                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 ${
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 cursor-default ${
                     !unlockedSettings.ng 
                       ? "opacity-80 bg-slate-105 border border-slate-200/60" 
                       : "bg-emerald-50 border border-emerald-300 shadow-2xs"
                   }`}
-                  title={!unlockedSettings.ng ? "Klik 3 kali untuk mengubah pilihan huruf NG" : "Terbuka - Silakan pilih ejaan NG"}
                 >
                   <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
                     {!unlockedSettings.ng ? "🔒 NG:" : "🔓 NG:"}
@@ -2167,7 +2168,7 @@ export default function App() {
                   <select
                     disabled={!unlockedSettings.ng}
                     className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
-                      !unlockedSettings.ng ? "pointer-events-none opacity-80" : "cursor-pointer"
+                      !unlockedSettings.ng ? "pointer-events-none opacity-80 cursor-default" : "cursor-pointer"
                     }`}
                     value={pegonNgStyle}
                     onChange={(e) => {
@@ -2190,6 +2191,9 @@ export default function App() {
                       );
                       showToast(`Huruf Nga (ng) diubah ke: ${val === "dot" ? "ڠ (Nga 3 Titik)" : "ع (Ain Polos)"}`);
                       
+                      // Lock style selection again after change
+                      setUnlockedSettings(prev => ({ ...prev, ng: false }));
+
                       // Sync to Google Sheets in real-time
                       syncSettingsToSheetsDirect(pegonGaStyle, val, pegonPStyle, pegonNyStyle, pegonCStyle);
                     }}
@@ -2201,12 +2205,11 @@ export default function App() {
  
                 <div 
                   onClick={(e) => handleSettingClick(e, "p")}
-                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 ${
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 cursor-default ${
                     !unlockedSettings.p 
                       ? "opacity-80 bg-slate-105 border border-slate-200/60" 
                       : "bg-emerald-50 border border-emerald-300 shadow-2xs"
                   }`}
-                  title={!unlockedSettings.p ? "Klik 3 kali untuk mengubah pilihan huruf P" : "Terbuka - Silakan pilih ejaan P"}
                 >
                   <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
                     {!unlockedSettings.p ? "🔒 P:" : "🔓 P:"}
@@ -2214,7 +2217,7 @@ export default function App() {
                   <select
                     disabled={!unlockedSettings.p}
                     className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
-                      !unlockedSettings.p ? "pointer-events-none opacity-80" : "cursor-pointer"
+                      !unlockedSettings.p ? "pointer-events-none opacity-80 cursor-default" : "cursor-pointer"
                     }`}
                     value={pegonPStyle}
                     onChange={(e) => {
@@ -2237,6 +2240,9 @@ export default function App() {
                       );
                       showToast(`Huruf P (p) diubah ke: ${val === "dot" ? "ڤ (Pa 3 Titik)" : "ف (Fa Polos)"}`);
                       
+                      // Lock style selection again after change
+                      setUnlockedSettings(prev => ({ ...prev, p: false }));
+
                       // Sync to Google Sheets in real-time
                       syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, val, pegonNyStyle, pegonCStyle);
                     }}
@@ -2248,12 +2254,11 @@ export default function App() {
  
                 <div 
                   onClick={(e) => handleSettingClick(e, "ny")}
-                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 ${
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 cursor-default ${
                     !unlockedSettings.ny 
                       ? "opacity-80 bg-slate-105 border border-slate-200/60" 
                       : "bg-emerald-50 border border-emerald-300 shadow-2xs"
                   }`}
-                  title={!unlockedSettings.ny ? "Klik 3 kali untuk mengubah pilihan huruf NY" : "Terbuka - Silakan pilih ejaan NY"}
                 >
                   <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
                     {!unlockedSettings.ny ? "🔒 NY:" : "🔓 NY:"}
@@ -2261,7 +2266,7 @@ export default function App() {
                   <select
                     disabled={!unlockedSettings.ny}
                     className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
-                      !unlockedSettings.ny ? "pointer-events-none opacity-80" : "cursor-pointer"
+                      !unlockedSettings.ny ? "pointer-events-none opacity-80 cursor-default" : "cursor-pointer"
                     }`}
                     value={pegonNyStyle}
                     onChange={(e) => {
@@ -2285,6 +2290,9 @@ export default function App() {
                       const displayLabel = val === "ya" ? "ي (Ya Polos)" : val === "ya_dot" ? "ۑ (Ya 3 Titik Bawah)" : "ڽ (Nya 3 Titik Atas)";
                       showToast(`Huruf Ny (ny) diubah ke: ${displayLabel}`);
                       
+                      // Lock style selection again after change
+                      setUnlockedSettings(prev => ({ ...prev, ny: false }));
+
                       // Sync to Google Sheets in real-time
                       syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, pegonPStyle, val, pegonCStyle);
                     }}
@@ -2297,12 +2305,11 @@ export default function App() {
  
                 <div 
                   onClick={(e) => handleSettingClick(e, "c")}
-                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 ${
+                  className={`flex items-center px-1.5 py-0.5 rounded-lg transition-all shrink-0 select-none border-s border-slate-200 ps-1.5 cursor-default ${
                     !unlockedSettings.c 
                       ? "opacity-80 bg-slate-105 border border-slate-200/60" 
                       : "bg-emerald-50 border border-emerald-300 shadow-2xs"
                   }`}
-                  title={!unlockedSettings.c ? "Klik 3 kali untuk mengubah pilihan huruf C" : "Terbuka - Silakan pilih ejaan C"}
                 >
                   <span className="text-[10px] uppercase font-mono text-slate-500 mr-1 flex items-center gap-0.5 font-bold">
                     {!unlockedSettings.c ? "🔒 C:" : "🔓 C:"}
@@ -2310,7 +2317,7 @@ export default function App() {
                   <select
                     disabled={!unlockedSettings.c}
                     className={`bg-white border border-slate-200 rounded py-0.5 px-1 text-xs text-slate-700 font-bold focus:outline-none ${
-                      !unlockedSettings.c ? "pointer-events-none opacity-80" : "cursor-pointer"
+                      !unlockedSettings.c ? "pointer-events-none opacity-80 cursor-default" : "cursor-pointer"
                     }`}
                     value={pegonCStyle}
                     onChange={(e) => {
@@ -2333,6 +2340,9 @@ export default function App() {
                       );
                       showToast(`Huruf C (c) diubah ke: ${val === "dot" ? "چ (Ca 3 Titik)" : "ج (Jim Polos)"}`);
                       
+                      // Lock style selection again after change
+                      setUnlockedSettings(prev => ({ ...prev, c: false }));
+
                       // Sync to Google Sheets in real-time
                       syncSettingsToSheetsDirect(pegonGaStyle, pegonNgStyle, pegonPStyle, pegonNyStyle, val);
                     }}
@@ -2822,7 +2832,7 @@ export default function App() {
                             onClick={(e) => handleRowClick(e, rule)}
                             className={`${
                               !rule.isPreset 
-                                ? "cursor-pointer hover:bg-indigo-50/40 active:bg-indigo-100/30" 
+                                ? "cursor-default hover:bg-indigo-50/40 active:bg-indigo-100/30" 
                                 : "hover:bg-slate-50/50"
                             } transition-colors select-none`}
                             title={rule.isPreset ? "Referensi bawaan sistem (terkunci)." : undefined}
