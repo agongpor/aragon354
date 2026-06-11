@@ -94,6 +94,7 @@ export default function App() {
 
   // Print-ready preview modal state
   const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'lengkap' | 'latin-arab' | 'pegon-saja'>('lengkap');
   const [showFormatSelector, setShowFormatSelector] = useState(false);
   const [pdfTitle, setPdfTitle] = useState("DOKUMEN TRANSLITERASI RESMI");
@@ -1501,9 +1502,18 @@ export default function App() {
                 <span className="text-white font-bold text-xl">A</span>
               </div>
               <div>
-                <h1 className="text-xl font-extrabold text-slate-900 leading-none tracking-tight font-display">
-                  aragon
-                </h1>
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-xl font-extrabold text-slate-900 leading-none tracking-tight font-display">
+                    aragon
+                  </h1>
+                  <button
+                    onClick={() => setIsInfoModalOpen(true)}
+                    className="p-1 text-slate-400 hover:text-indigo-650 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Informasi Aplikasi"
+                  >
+                    <Info className="w-4 h-4" />
+                  </button>
+                </div>
                 <p className="text-xs text-slate-500 mt-1 font-medium italic">
                   aplikasi arab pegon
                 </p>
@@ -2728,6 +2738,86 @@ export default function App() {
           Ditenagai oleh <span className="font-mono text-indigo-800 font-semibold bg-indigo-50 px-1 rounded">Vite React</span> dan <span className="font-mono text-amber-700 font-semibold bg-amber-50 inline-flex items-center gap-0.5 px-1 rounded"><Sparkles className="w-2.5 h-2.5 inline" /> Gemini 3.5-Flash</span>
         </p>
       </footer>
+
+
+      {/* INFO MODAL POP-UP */}
+      {isInfoModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 no-print transition-all">
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 transform transition-all scale-100 flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white p-5 flex justify-between items-center">
+              <div className="flex items-center space-x-2.5">
+                <Info className="w-5 h-5 text-amber-300" />
+                <h3 className="font-display font-bold text-lg">Informasi Aplikasi</h3>
+              </div>
+              <button
+                onClick={() => setIsInfoModalOpen(false)}
+                className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded-full transition-all cursor-pointer"
+                title="Tutup"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-5 text-slate-700">
+              <div className="text-center pb-4 border-b border-slate-100">
+                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+                  <span className="font-display font-extrabold text-3xl">A</span>
+                </div>
+                <h4 className="font-display font-extrabold text-xl text-slate-900 leading-none">aragon</h4>
+                <p className="text-xs text-slate-500 mt-1 font-medium italic">Aplikasi Alih Aksara Arab Pegon Nusantara</p>
+              </div>
+
+              <div className="space-y-4 text-sm">
+                <div className="flex flex-col space-y-1">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">Penyusun / Prompted By</span>
+                  <span className="font-semibold text-slate-800">agongpor</span>
+                </div>
+
+                <div className="flex flex-col space-y-1 border-t border-slate-100 pt-3">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">Kontak Email</span>
+                  <a 
+                    href="mailto:agongpor@gmail.com" 
+                    className="font-semibold text-indigo-600 hover:text-indigo-800 flex items-center space-x-2 transition-colors py-1 px-2 rounded-lg bg-indigo-50/50 hover:bg-indigo-50 w-fit"
+                  >
+                    <span>agongpor@gmail.com</span>
+                    <span className="text-[10px] bg-indigo-100 px-1.5 py-0.5 rounded text-indigo-700 font-mono font-bold">Kirim Email</span>
+                  </a>
+                </div>
+
+                <div className="flex flex-col space-y-1 border-t border-slate-100 pt-3">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">WhatsApp / HP</span>
+                  <a 
+                    href="https://wa.me/628123021826" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="font-semibold text-emerald-600 hover:text-emerald-800 flex items-center space-x-2 transition-colors py-1 px-2 rounded-lg bg-emerald-50/50 hover:bg-emerald-50 w-fit"
+                  >
+                    <span>+628123021826</span>
+                    <span className="text-[10px] bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-700 font-mono font-bold">Chat WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 bg-slate-50/50 border-t border-slate-100 flex flex-col items-center justify-center space-y-4">
+              <div className="text-center font-arabic font-bold text-xl text-indigo-950" dir="rtl">
+                الحمد لله جزا كم الله خيرا
+              </div>
+              <button
+                onClick={() => setIsInfoModalOpen(false)}
+                className="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition-all"
+              >
+                Tutup
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
 
       {/* FULL PRINT-READY DIALOG MODAL (ONLY triggered when generating pdf/print view) */}
