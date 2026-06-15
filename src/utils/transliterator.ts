@@ -5,6 +5,18 @@ function isVowel(char: string): boolean {
   return "aeiouAEIOUéèêÉÈÊ".includes(char);
 }
 
+// Helper to check if the index of a character falls within a found substring pattern
+function indexInPattern(word: string, index: number, pattern: string): boolean {
+  let pos = word.indexOf(pattern);
+  while (pos !== -1) {
+    if (index >= pos && index < pos + pattern.length) {
+      return true;
+    }
+    pos = word.indexOf(pattern, pos + 1);
+  }
+  return false;
+}
+
 // Intelligent helper to identify "e pepet" (schwa / ə / sound) in Indonesian/Java words.
 // E-pepet (e.g. bekas, bekal, besar, teman) is unwritten and should not map to Ya (ي).
 // Taling (e.g. bebek, lele, meja) is written and maps to Ya (ي).
@@ -16,44 +28,71 @@ function isEPepet(word: string, index: number): boolean {
 
   const lower = word.toLowerCase();
 
-  // Handle explicit taling words/roots (e at any position of these words is taling, so isEPepet = false)
-  const talingRoots = [
-    "bebe", "becek", "beda", "bebas", "besok", "bela", "belek", "begal", "beres", "betet", 
-    "desa", "dewan", "depok", "deret", "dehem", 
-    "enak", "ecer", "esok", "era", "ember", "emang", "edan", "eja", "elit", "elok", "esoterik",
-    "gembel", "geser", "gepeng", "gemes", "gede", 
-    "jahe", 
-    "kere", "kemah", "kelereng", "keling", 
-    "lele", "leher", "lewat", "leles", "lempeng", "lengser", 
-    "meja", "merah", "melo", "nene", "nenek", 
-    "pesta", "pena", "pelet", "pendek", "tempe", "tempel",
-    "rewel", "rem", "resep", "reken", "remedi", "rekening",
-    "sate", "setan", "sewa", "seng", "segel", "sendok", "senter", 
-    "teh", "tema", "tente", "tante", "teko", "teras"
+  // 1. Check strict mixed-vowel words first (where different 'e' in the same word have different sound types)
+  const mixedVowelPatterns = [
+    { word: "mereka", indices: { 1: true, 3: false } },
+    { word: "pencet", indices: { 1: true, 4: false } },
+    { word: "keren", indices: { 1: true, 3: false } },
+    { word: "gembel", indices: { 1: true, 4: false } },
+    { word: "lengser", indices: { 1: true, 4: false } },
+    { word: "merenda", indices: { 1: true, 3: false } },
+    { word: "kelereng", indices: { 1: true, 3: false, 5: false } }, // ke (pepet) - le (taling) - reng (taling)
+    { word: "peleset", indices: { 1: true, 3: true, 5: false } }, // pe (pepet) - le (pepet) - set (taling)
+    { word: "meleset", indices: { 1: true, 3: true, 5: false } } // me (pepet) - le (pepet) - set (taling)
   ];
 
-  if (talingRoots.some(root => lower.includes(root))) {
-    const foundRoot = talingRoots.find(root => lower.includes(root))!;
-    const rootIndex = lower.indexOf(foundRoot);
-    const indexInRoot = index - rootIndex;
-    if (indexInRoot >= 0 && indexInRoot < foundRoot.length) {
-      // The 'e' is inside the taling root! So it is taling (isEPepet = false)
-      return false;
+  for (const rule of mixedVowelPatterns) {
+    let pos = lower.indexOf(rule.word);
+    while (pos !== -1) {
+      const relIndex = index - pos;
+      if (rule.indices[relIndex] !== undefined) {
+        return rule.indices[relIndex];
+      }
+      pos = lower.indexOf(rule.word, pos + 1);
     }
   }
 
-  // Explicitly check known cases like "bekas" and "bekal"
-  if (lower.startsWith("bekas") || lower.startsWith("bekal") || lower === "bekas" || lower === "bekal") {
-    return true;
+  // 2. Exact/Root words lists for pepet (all 'e' are pepet, returns true)
+  const pepetPatterns = [
+    "belajar", "bekal", "segar", "rempah", "tengah", "lemah", "emas", "empat", "enam", "entah",
+    "teman", "besar", "keras", "bekas", "bencana", "benci", "benda", "bentuk", "sempat", 
+    "sebelum", "dekat", "dengar", "cepat", "sedikit", "pemerintah", "kerja", "negeri", "sendiri", 
+    "tegas", "tenang", "terang", "tetap", "sedang", "sejak", "jelas", "kelas", "pernah", 
+    "semua", "pekerja", "pencuri", "selamat", "selatan", "semenjana", "sementara", "belakang", 
+    "keluar", "pemuda", "sekolah", "selalu", "selama", "selesa", "cerdas", "hempas", "gempar"
+  ];
+
+  // Exactly/Root words lists for taling (all 'e' are taling, returns false)
+  const talingPatterns = [
+    "bebek", "tembak", "repot", "palet", "jelek", "lempar", "enak", "ember", "esok", "meja", 
+    "merah", "leher", "lele", "tempe", "sate", "jahe", "kere", "sore", "kece", "kafe", 
+    "herman", "helm", "rem", "resep", "reken", "rekening", "sewa", "setan", "segel", "sendok", 
+    "senter", "teh", "tema", "tante", "teko", "teras", "peta", "pena", "pesta", "pendek", 
+    "pelet", "tempel", "gepeng", "geser", "lempeng", "dewan", "desa", "depok", "deret", "bebas", 
+    "beda", "besok", "bela", "belek", "begal", "beres", "betet", "lewat", "leles", "melo", 
+    "nenek", "nene", "rewel", "remedi", "seng", "tente", "copet", "dompet", "karet", "monyet", 
+    "rembet", "seret", "kemah", "keling", "jember", "becek"
+  ];
+
+  // We group them and sort by length descending to match more specific/longer patterns first (e.g. "lempeng" vs "lemp")
+  const customPatterns = [
+    ...pepetPatterns.map(p => ({ pattern: p, isPepet: true })),
+    ...talingPatterns.map(p => ({ pattern: p, isPepet: false }))
+  ].sort((a, b) => b.pattern.length - a.pattern.length);
+
+  for (const item of customPatterns) {
+    if (indexInPattern(lower, index, item.pattern)) {
+      return item.isPepet;
+    }
   }
 
-  // Common Indonesian prefixes: be-, me-, se-, ke-, pe-, te-, de-, ge-, ce-, le-
+  // 3. Prefix heuristic logic: Common Indonesian prefixes: be-, me-, se-, ke-, pe-, te-, de-, ge-, ce-, le-
   if (index === 1) {
     const first = lower[0];
     if (["b", "m", "s", "k", "p", "t", "d", "g", "c", "l"].includes(first)) {
-      // Exclude known e-taling cases (where e sounds like 'enak' or 'sate')
-      const talingWords = ["bebas", "beda", "besok", "bebek", "becek", "bela", "desa", "lele", "leher", "lewat", "meja", "merah", "setan", "sewa", "teh", "tema", "pena", "pesta", "lempeng"];
-      if (talingWords.some(tw => lower.startsWith(tw))) {
+      // Exclude known prefix-like taling cases
+      const prefixTalingWords = ["bebas", "beda", "besok", "bebek", "becek", "bela", "desa", "lele", "leher", "lewat", "meja", "merah", "setan", "sewa", "teh", "tema", "pena", "pesta", "lempeng", "lempar", "tembak", "repot"];
+      if (prefixTalingWords.some(tw => lower.startsWith(tw))) {
         return false;
       }
       return true;
@@ -62,7 +101,7 @@ function isEPepet(word: string, index: number): boolean {
 
   // If 'e' is at index 0 (e.g., "emas", "empat", "enam", "entah")
   if (index === 0 && lower.length > 2) {
-    const nonPepetStart = ["ekor", "enak", "ecer", "elok", "esok", "era"];
+    const nonPepetStart = ["ekor", "enak", "ecer", "elok", "esok", "era", "ember"];
     if (nonPepetStart.some(w => lower.startsWith(w))) {
       return false;
     }
@@ -74,6 +113,10 @@ function isEPepet(word: string, index: number): boolean {
     const after = lower.substring(index + 1);
     const next2 = after.substring(0, 2);
     if (["ng", "ny", "mp", "nt", "nd", "nc", "nj", "rk", "rt", "rg", "rp", "lm", "lk", "rd", "rn"].includes(next2)) {
+      // Exclude known taling words with these blends
+      if (lower.includes("lempar") || lower.includes("tempel") || lower.includes("tembak")) {
+        return false;
+      }
       return true;
     }
   }
@@ -83,7 +126,11 @@ function isEPepet(word: string, index: number): boolean {
     const prev = lower[index - 1];
     const next = lower[index + 1];
     if (!isVowel(prev) && !isVowel(next)) {
-      // Exclude short words that might be e-taling like "gen"
+      // Exclude known shorter words or default to pepet for longer words
+      const shortTalingWords = ["rem", "seng", "helm", "teh"];
+      if (shortTalingWords.some(w => lower.includes(w))) {
+        return false;
+      }
       if (lower.length > 3) {
         return true;
       }

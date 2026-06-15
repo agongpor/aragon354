@@ -1413,15 +1413,11 @@ export default function App() {
     }
   };
 
-  // Open edit popup modal on row triple-click
+  // Delete custom/dictionary rule on row triple-click
   const handleRowClick = (e: React.MouseEvent, rule: CustomMapping) => {
     if (rule.isPreset) return;
     if (e.detail === 3) {
-      setActivePopupRule(rule);
-      setPopupLatin(rule.latin);
-      setPopupArabic(rule.arabic);
-      setPopupDescription(rule.description || "");
-      showToast(`Membuka popup edit untuk: "${rule.latin}"`);
+      handleDeleteRule(rule.id, `${rule.latin} &rarr; ${rule.arabic}`);
     }
   };
 
@@ -2860,9 +2856,13 @@ export default function App() {
                                 <div className="flex justify-end items-center space-x-1">
                                   {/* Edit button is hidden here per request. Only Delete button exists */}
                                   <button
-                                    onClick={() => handleDeleteRule(rule.id, `${rule.latin} &rarr; ${rule.arabic}`)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (e.detail === 3) {
+                                        handleDeleteRule(rule.id, `${rule.latin} &rarr; ${rule.arabic}`);
+                                      }
+                                    }}
                                     className="p-1.5 text-slate-400 hover:text-red-650 transition-colors cursor-pointer"
-                                    title="Hapus Aturan"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
