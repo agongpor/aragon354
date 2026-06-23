@@ -37,6 +37,113 @@ import {
   splitLineIntoTokens
 } from "./utils/transliterator";
 
+const surahMap: Record<string, number> = {
+  "fatihah": 1, "alfatihah": 1,
+  "baqarah": 2, "albaqarah": 2,
+  "imran": 3, "aliimran": 3, "alimran": 3,
+  "nisa": 4, "annisa": 4,
+  "maidah": 5, "almaidah": 5,
+  "anam": 6, "alanam": 6,
+  "araf": 7, "alaraf": 7,
+  "anfal": 8, "alanfal": 8,
+  "taubah": 9, "attaubah": 9, "baraah": 9,
+  "yunus": 10, "hud": 11, "yusuf": 12,
+  "rad": 13, "arrad": 13,
+  "ibrahim": 14, "hijr": 15, "alhijr": 15,
+  "nahl": 16, "annahl": 16,
+  "isra": 17, "alisra": 17, "baniisrail": 17,
+  "kahf": 18, "alkahf": 18,
+  "maryam": 19, "taha": 20, "tah": 20,
+  "anbiya": 21, "alanbiya": 21,
+  "hajj": 22, "alhajj": 22,
+  "muminun": 23, "almuminun": 23,
+  "nur": 24, "annur": 24,
+  "furqan": 25, "alfurqan": 25,
+  "shuara": 26, "ashshuara": 26,
+  "naml": 27, "annaml": 27,
+  "qasas": 28, "alqasas": 28,
+  "ankabut": 29, "alankabut": 29,
+  "rum": 30, "arrum": 30,
+  "luqman": 31, "sajdah": 32, "assajdah": 32,
+  "ahzab": 33, "alahzab": 33,
+  "saba": 34, "saba'": 34,
+  "fatir": 35, "malayikah": 35,
+  "yasin": 36, "yaseen": 36,
+  "saffat": 37, "assaffat": 37,
+  "sad": 38, "zumar": 39, "azzumar": 39,
+  "ghafir": 40, "mumin": 40, "almumin": 40,
+  "fussilat": 41, "hamim": 41,
+  "shura": 42, "ashshura": 42,
+  "zukhruf": 43, "azzukhruf": 43,
+  "dukhan": 44, "addukhan": 44,
+  "jathiyah": 45, "aljathiyah": 45,
+  "ahqaf": 46, "alahqaf": 46,
+  "muhammad": 47, "fath": 48, "alfath": 48,
+  "hujurat": 49, "alhujurat": 49,
+  "qaf": 50, "dhariyat": 51, "adhdhariyat": 51,
+  "tur": 52, "attur": 52,
+  "najm": 53, "annajm": 53,
+  "qamar": 54, "alqamar": 54,
+  "rahman": 55, "arrahman": 55,
+  "waqiah": 56, "alwaqiah": 56,
+  "hadid": 57, "alhadid": 57,
+  "mujadilah": 58, "almujadilah": 58,
+  "hashr": 59, "alhashr": 59,
+  "mumtahanah": 60, "almumtahanah": 60,
+  "saff": 61, "assaff": 61,
+  "jumuah": 62, "aljumuah": 62, "jummah": 62,
+  "munafiqun": 63, "almunafiqun": 63,
+  "taghabun": 64, "altaghabun": 64,
+  "talaq": 65, "attalaq": 65,
+  "tahrim": 66, "attharim": 66,
+  "mulk": 67, "almulk": 67,
+  "qalam": 68, "alqalam": 68,
+  "haqqah": 69, "alhaqqah": 69,
+  "maarij": 70, "almaarij": 70,
+  "nuh": 71, "jinn": 72, "aljinn": 72,
+  "muzzammil": 73, "almuzzammil": 73,
+  "muddaththir": 74, "almuddaththir": 74,
+  "qiyamah": 75, "alqiyamah": 75,
+  "insan": 76, "alinsan": 76, "dahr": 76,
+  "mursalat": 77, "almursalat": 77,
+  "naba": 78, "annaba": 78,
+  "naziat": 79, "annaziat": 79,
+  "abasa": 80, "takwir": 81, "attakwir": 81,
+  "infitar": 82, "alinfitar": 82,
+  "mutaffifin": 83, "almutaffifin": 83,
+  "inshiqaq": 84, "alinshiqaq": 84,
+  "buruj": 85, "alburuj": 85,
+  "tariq": 86, "attariq": 86,
+  "ala": 87, "alala": 87,
+  "ghashiyah": 88, "alghashiyah": 88,
+  "fajr": 89, "alfajr": 89,
+  "balad": 90, "albalad": 90,
+  "shams": 91, "ashshams": 91,
+  "layl": 92, "allayl": 92,
+  "duha": 93, "adduha": 93,
+  "sharh": 94, "alsharh": 94, "inshirah": 94, "alinshirah": 94,
+  "tin": 95, "attin": 95,
+  "alaq": 96, "alalaq": 96, "iqra": 96,
+  "qadr": 97, "alqadr": 97,
+  "bayyinah": 98, "albayyinah": 98,
+  "zalzalah": 99, "azzalzalah": 99, "zilzal": 99,
+  "adiyat": 100, "aladiyat": 100,
+  "qariah": 101, "alqariah": 101,
+  "takathur": 102, "attakathur": 102,
+  "asr": 103, "alasr": 103,
+  "humazah": 104, "alhumazah": 104,
+  "fil": 105, "alfil": 105,
+  "quraysh": 106, "alquraysh": 106, "quraish": 106,
+  "maun": 107, "almaun": 107,
+  "kawthar": 108, "alkawthar": 108, "kautsar": 108,
+  "kafirun": 109, "alkafirun": 109,
+  "nasr": 110, "alnasr": 110,
+  "masad": 111, "almasad": 111, "lahab": 111,
+  "ikhlas": 112, "alikhlas": 112, "tauhid": 112,
+  "falaq": 113, "alfalaq": 113,
+  "nas": 114, "annas": 114
+};
+
 const EXAMPLES: any[] = [];
 
 export default function App() {
@@ -1288,37 +1395,84 @@ export default function App() {
         }));
 
         try {
-          const response = await fetch("/api/quran-hadits", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: queryText })
-          });
-
           let data: any = null;
-          const contentType = response.headers.get("Content-Type") || response.headers.get("content-type") || "";
           
-          if (contentType.includes("application/json")) {
-            try {
-              data = await response.json();
-            } catch (_) {
-              throw new Error("Gagal mengurai respons data/JSON dari server.");
-            }
-          } else {
-            let textMsg = "";
-            try {
-              textMsg = await response.text();
-            } catch (_) {}
+          try {
+            const response = await fetch("/api/quran-hadits", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ query: queryText })
+            });
+
+            const contentType = response.headers.get("Content-Type") || response.headers.get("content-type") || "";
             
-            if (!response.ok) {
-              const previewText = textMsg ? textMsg.slice(0, 150) : "";
-              throw new Error(`Kesalahan server (${response.status})${previewText ? `: ${previewText}` : ""}`);
+            if (response.ok && contentType.includes("application/json")) {
+              data = await response.json();
             } else {
-              throw new Error("Respons dari server bukan berformat JSON.");
+              let textMsg = "";
+              try {
+                textMsg = await response.text();
+              } catch (_) {}
+              const previewText = textMsg ? textMsg.slice(0, 150) : "";
+              throw new Error(`Status ${response.status}${previewText ? `: ${previewText}` : ""}`);
+            }
+          } catch (backendErr: any) {
+            console.warn("[Quran-Hadits] Backend endpoint failed, trying public API client fallback:", backendErr);
+            
+            // Normalize and parse the search query (e.g. Al-Baqarah 183 or 2:183)
+            const cleanQuery = queryText.trim().replace(/^qs\.?\s+/i, "");
+            const match = cleanQuery.match(/^([\w\s'-]+?)[\s:]+(\d+)$/i);
+            
+            if (match) {
+              const surahIdentifier = match[1].trim().toLowerCase();
+              const ayahNum = parseInt(match[2].trim(), 10);
+              
+              let surahNum = parseInt(surahIdentifier, 10);
+              if (isNaN(surahNum)) {
+                // Normalize identifier for dictionary lookup (remove dashes, spaces, apostrophes)
+                const normalizedKey = surahIdentifier.replace(/[-'\s]/g, "");
+                const mapped = surahMap[normalizedKey] || surahMap[surahIdentifier];
+                if (mapped) {
+                  surahNum = mapped;
+                }
+              }
+              
+              if (!isNaN(surahNum) && surahNum >= 1 && surahNum <= 114 && ayahNum > 0) {
+                const publicUrl = `https://api.alquran.cloud/v1/ayah/${surahNum}:${ayahNum}`;
+                const pubResponse = await fetch(publicUrl);
+                if (pubResponse.ok) {
+                  const pubJson = await pubResponse.json();
+                  if (pubJson && pubJson.code === 200 && pubJson.data) {
+                    const arabicTextFull = pubJson.data.text;
+                    const surahNameArabic = pubJson.data.surah.name.replace("سُورَةُ", "").trim();
+                    const surahNameEnglish = pubJson.data.surah.englishName;
+                    
+                    // Simple helper to convert standard numbers to beautiful Arabic numerals
+                    const toArabicNumerals = (num: number) => {
+                      return String(num).split("").map(d => "0123456789".indexOf(d) !== -1 ? "٠١٢٣٤٥٦٧٨٩"[parseInt(d)] : d).join("");
+                    };
+
+                    data = {
+                      arabic: `${arabicTextFull} (${surahNameArabic}: ${toArabicNumerals(ayahNum)})`,
+                      reference: `QS ${surahNameEnglish}: ${ayahNum}`,
+                      explanation: `Diunduh langsung via Al-Qur'an Cloud API (${surahNameEnglish} Ayat ${ayahNum})`
+                    };
+                  } else {
+                    throw new Error("Ayat tidak ditemukan di API Al-Qur'an.");
+                  }
+                } else {
+                  throw new Error(`Ayat tidak valid atau di luar jangkauan surah (${surahNum}).`);
+                }
+              } else {
+                throw new Error(`Surah "${match[1]}" tidak dikenali.`);
+              }
+            } else {
+              throw new Error(`Format pencarian "${queryText}" tidak dikenali (Gunakan format: NamaSurah NoAyat, misal: Al-Baqarah 183 atau 2:183).`);
             }
           }
 
-          if (!response.ok) {
-            throw new Error(data && data.error ? data.error : "Gagal mengambil data dari server.");
+          if (!data) {
+            throw new Error("Gagal mengambil data ayat.");
           }
 
           setQuranHaditsResults(prev => ({
