@@ -1396,29 +1396,35 @@ export default function App() {
 
         try {
           let data: any = null;
+          let useFallback = isStaticDeployment;
           
-          try {
-            const response = await fetch("/api/quran-hadits", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ query: queryText })
-            });
+          if (!useFallback) {
+            try {
+              const response = await fetch("/api/quran-hadits", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query: queryText })
+              });
 
-            const contentType = response.headers.get("Content-Type") || response.headers.get("content-type") || "";
-            
-            if (response.ok && contentType.includes("application/json")) {
-              data = await response.json();
-            } else {
-              let textMsg = "";
-              try {
-                textMsg = await response.text();
-              } catch (_) {}
-              const previewText = textMsg ? textMsg.slice(0, 150) : "";
-              throw new Error(`Status ${response.status}${previewText ? `: ${previewText}` : ""}`);
+              const contentType = response.headers.get("Content-Type") || response.headers.get("content-type") || "";
+              
+              if (response.ok && contentType.includes("application/json")) {
+                data = await response.json();
+              } else {
+                let textMsg = "";
+                try {
+                  textMsg = await response.text();
+                } catch (_) {}
+                const previewText = textMsg ? textMsg.slice(0, 150) : "";
+                throw new Error(`Status ${response.status}${previewText ? `: ${previewText}` : ""}`);
+              }
+            } catch (backendErr: any) {
+              console.warn("[Quran-Hadits] Backend endpoint failed, trying public API client fallback:", backendErr);
+              useFallback = true;
             }
-          } catch (backendErr: any) {
-            console.warn("[Quran-Hadits] Backend endpoint failed, trying public API client fallback:", backendErr);
-            
+          }
+
+          if (useFallback) {
             // Normalize and parse the search query (e.g. Al-Baqarah 183 or 2:183)
             const cleanQuery = queryText.trim().replace(/^qs\.?\s+/i, "");
             const match = cleanQuery.match(/^([\w\s'-]+?)[\s:]+(\d+)$/i);
@@ -1467,7 +1473,7 @@ export default function App() {
                 throw new Error(`Surah "${match[1]}" tidak dikenali.`);
               }
             } else {
-              throw new Error(`Format pencarian "${queryText}" tidak dikenali (Gunakan format: NamaSurah NoAyat, misal: Al-Baqarah 183 atau 2:183).`);
+              throw new Error(`Format pencarian "${queryText}" tidak dikenali (Gunakan format: NamaSurah NoAyat, misal: Al-Baqarah 183 atau 2:183). Untuk pencarian hadis, mohon jalankan pada lingkungan server aktif.`);
             }
           }
 

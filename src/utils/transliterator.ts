@@ -734,6 +734,20 @@ export function transliterateWord(
 
     // 2. Try single character
     const currentChar = wordToScan[i];
+    
+    // Convert Latin digit to Arabic numeral
+    if ("0123456789".includes(currentChar)) {
+      const arabicDigit = "٠١٢٣٤٥٦٧٨٩"["0123456789".indexOf(currentChar)];
+      arabicOutput += arabicDigit;
+      steps.push({
+        original: currentChar,
+        result: arabicDigit,
+        explanation: `Aturan Angka: Angka Latin "${currentChar}" diubah menjadi Angka Arab "${arabicDigit}".`,
+      });
+      i++;
+      continue;
+    }
+
     if (charLookup[currentChar] !== undefined) {
       const arabicChar = charLookup[currentChar];
       
@@ -937,7 +951,17 @@ export function transliteratePegonToLatinWord(
     "إ": "i",
     "ؤ": "u",
     "ئ": "i",
-    "ء": "'"
+    "ء": "'",
+    "٠": "0",
+    "١": "1",
+    "٢": "2",
+    "٣": "3",
+    "٤": "4",
+    "٥": "5",
+    "٦": "6",
+    "٧": "7",
+    "٨": "8",
+    "٩": "9"
   };
 
   let latinOutput = "";
