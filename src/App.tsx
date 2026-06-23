@@ -569,13 +569,22 @@ export default function App() {
   const [pdfNotes, setPdfNotes] = useState("Hasil alih aksara dari karakter Latin menuju ejaan Arab yang sah berdasarkan referensi linguistik kustom.");
   const [printDate, setPrintDate] = useState(() => {
     const now = new Date();
-    const optionsStr = now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" });
-    return new Date(optionsStr).toLocaleDateString("id-ID", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
+    try {
+      return now.toLocaleDateString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+    } catch (e) {
+      return now.toLocaleDateString("id-ID", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      });
+    }
   });
 
   const [userIp, setUserIp] = useState("Memuat IP...");
@@ -585,15 +594,39 @@ export default function App() {
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const optionsStr = now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" });
-      const jacDate = new Date(optionsStr);
-      const yyyy = jacDate.getFullYear();
-      const mm = String(jacDate.getMonth() + 1).padStart(2, "0");
-      const dd = String(jacDate.getDate()).padStart(2, "0");
-      const hh = String(jacDate.getHours()).padStart(2, "0");
-      const min = String(jacDate.getMinutes()).padStart(2, "0");
-      const ss = String(jacDate.getSeconds()).padStart(2, "0");
-      setCurrentTime(`${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`);
+      try {
+        const formatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: "Asia/Jakarta",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+        const parts = formatter.formatToParts(now);
+        const partMap = new Map(parts.map(p => [p.type, p.value]));
+        
+        const yyyy = partMap.get("year") || "2026";
+        const mm = partMap.get("month") || "01";
+        const dd = partMap.get("day") || "01";
+        const hh = partMap.get("hour") || "00";
+        const min = partMap.get("minute") || "00";
+        const ss = partMap.get("second") || "00";
+        
+        const hhFormatted = hh === "24" ? "00" : hh;
+        
+        setCurrentTime(`${yyyy}-${mm}-${dd} ${hhFormatted}:${min}:${ss}`);
+      } catch (e) {
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        const hh = String(now.getHours()).padStart(2, "0");
+        const min = String(now.getMinutes()).padStart(2, "0");
+        const ss = String(now.getSeconds()).padStart(2, "0");
+        setCurrentTime(`${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`);
+      }
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
@@ -628,15 +661,39 @@ export default function App() {
 
   const getJakartaTimestamp = () => {
     const now = new Date();
-    const optionsStr = now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" });
-    const jacDate = new Date(optionsStr);
-    const dd = String(jacDate.getDate()).padStart(2, "0");
-    const mm = String(jacDate.getMonth() + 1).padStart(2, "0");
-    const yyyy = jacDate.getFullYear();
-    const hh = String(jacDate.getHours()).padStart(2, "0");
-    const min = String(jacDate.getMinutes()).padStart(2, "0");
-    const ss = String(jacDate.getSeconds()).padStart(2, "0");
-    return `${hh}:${min}:${ss} ${dd}-${mm}-${yyyy}`;
+    try {
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Jakarta",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
+      const parts = formatter.formatToParts(now);
+      const partMap = new Map(parts.map(p => [p.type, p.value]));
+      
+      const yyyy = partMap.get("year") || "2026";
+      const mm = partMap.get("month") || "01";
+      const dd = partMap.get("day") || "01";
+      const hh = partMap.get("hour") || "00";
+      const min = partMap.get("minute") || "00";
+      const ss = partMap.get("second") || "00";
+      
+      const hhFormatted = hh === "24" ? "00" : hh;
+      
+      return `${hhFormatted}:${min}:${ss} ${dd}-${mm}-${yyyy}`;
+    } catch (e) {
+      const dd = String(now.getDate()).padStart(2, "0");
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const yyyy = now.getFullYear();
+      const hh = String(now.getHours()).padStart(2, "0");
+      const min = String(now.getMinutes()).padStart(2, "0");
+      const ss = String(now.getSeconds()).padStart(2, "0");
+      return `${hh}:${min}:${ss} ${dd}-${mm}-${yyyy}`;
+    }
   };
 
   // Local storage history state

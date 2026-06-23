@@ -54,6 +54,59 @@ function getGemini(): GoogleGenAI {
   return aiInstance;
 }
 
+// Robust helper to perform content generation with automatic model fallback and retry logic
+async function generateContentWithRetry(
+  ai: GoogleGenAI,
+  options: {
+    prompt: string;
+    systemInstruction: string;
+    responseSchema?: any;
+    temperature?: number;
+    preferredModel?: string;
+  }
+) {
+  const modelsToTry = [
+    options.preferredModel || "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+  ];
+
+  let lastError: any = null;
+
+  for (const modelName of modelsToTry) {
+    let attempts = 2; // up to 2 attempts per model
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        console.log(`Sending API request (Model: ${modelName}, Attempt: ${attempt}/${attempts})...`);
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: options.prompt,
+          config: {
+            systemInstruction: options.systemInstruction,
+            responseMimeType: options.responseSchema ? "application/json" : undefined,
+            responseSchema: options.responseSchema,
+            temperature: options.temperature ?? 0.2,
+          }
+        });
+
+        if (response && response.text) {
+          return response;
+        } else {
+          throw new Error("Received empty text response from Gemini API.");
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Attempt ${attempt} with model ${modelName} failed: ${err.message || err}`);
+        if (attempt < attempts) {
+          // Wait 800ms before retry
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+      }
+    }
+  }
+
+  throw lastError || new Error("Failed to generate content using all model fallbacks.");
+}
+
 // API endpoint for Gemini translation
 app.post("/api/translate-gemini", async (req: Request, res: Response) => {
   try {
@@ -119,37 +172,30 @@ Teks Latin:
 
 Tulis hasilnya dalam bahasa Arab Pegon yang rapi dengan arah Right-to-Left (RTL) yang sempurna menggunakan huruf-huruf khas Pegon Jawa seperti چ, ڠ, ࢴ, ڽ, ڤ.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            translation: {
-              type: Type.STRING,
-              description: isReverse ? "Hasil pembacaan aksara ke teks Latin biasa." : "Hasil transliterasi Arab Pegon.",
-            },
-            explanation: {
-              type: Type.STRING,
-              description: "Penjelasan linguistik dan detail ejaan Arab Pegon yang digunakan.",
-            },
+    const response = await generateContentWithRetry(ai, {
+      prompt,
+      systemInstruction: systemPrompt,
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          translation: {
+            type: Type.STRING,
+            description: isReverse ? "Hasil pembacaan aksara ke teks Latin biasa." : "Hasil transliterasi Arab Pegon.",
           },
-          required: ["translation", "explanation"],
+          explanation: {
+            type: Type.STRING,
+            description: "Penjelasan linguistik dan detail ejaan Arab Pegon yang digunakan.",
+          },
         },
-        temperature: 0.2, // Low temperature for high accuracy deterministic translations
+        required: ["translation", "explanation"],
       },
+      temperature: 0.2,
+      preferredModel: "gemini-3.5-flash",
     });
 
     const resultText = response.text ? response.text.trim() : "";
-    if (resultText) {
-      const parsed = JSON.parse(resultText);
-      return res.json(parsed);
-    } else {
-      throw new Error("Tidak mendapat respons teks dari AI.");
-    }
+    const parsed = JSON.parse(resultText);
+    return res.json(parsed);
   } catch (err: any) {
     console.error("Gemini API Error:", err);
     return res.status(500).json({
@@ -193,41 +239,34 @@ Harap berikan respons sebagai objek JSON dengan format schema berikut:
     const prompt = `Cari teks Arab berharakat lengkap dan referensi sahih untuk kueri berikut:
 "${query}"`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            arabic: {
-              type: Type.STRING,
-              description: "Teks Arab asli berharakat lengkap dengan penulisan baku serta kutipan referensi.",
-            },
-            reference: {
-              type: Type.STRING,
-              description: "Sumber rujukan singkat, misal: QS. Al-Baqarah: 183.",
-            },
-            explanation: {
-              type: Type.STRING,
-              description: "Keterangan rujukan sangat singkat tanpa arti/terjemahan/tafsir.",
-            },
+    const response = await generateContentWithRetry(ai, {
+      prompt,
+      systemInstruction: systemPrompt,
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          arabic: {
+            type: Type.STRING,
+            description: "Teks Arab asli berharakat lengkap dengan penulisan baku serta kutipan referensi.",
           },
-          required: ["arabic", "reference", "explanation"],
+          reference: {
+            type: Type.STRING,
+            description: "Sumber rujukan singkat, misal: QS. Al-Baqarah: 183.",
+          },
+          explanation: {
+            type: Type.STRING,
+            description: "Keterangan rujukan sangat singkat tanpa arti/terjemahan/tafsir.",
+          },
         },
-        temperature: 0.1,
+        required: ["arabic", "reference", "explanation"],
       },
+      temperature: 0.1,
+      preferredModel: "gemini-3.5-flash",
     });
 
     const resultText = response.text ? response.text.trim() : "";
-    if (resultText) {
-      const parsed = JSON.parse(resultText);
-      return res.json(parsed);
-    } else {
-      throw new Error("Tidak mendapat respons teks dari AI.");
-    }
+    const parsed = JSON.parse(resultText);
+    return res.json(parsed);
   } catch (err: any) {
     console.error("Quran/Hadits Lookup Error:", err);
     return res.status(500).json({
